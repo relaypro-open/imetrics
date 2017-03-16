@@ -1,0 +1,134 @@
+-module(imetrics_tests).
+-include_lib("eunit/include/eunit.hrl").
+
+start() ->
+    application:start(inets),
+    application:start(imetrics).
+
+stop(_Fixture) ->
+    application:stop(imetrics),
+    application:stop(inets).
+
+%% add tests
+add_test_() ->
+    {setup,
+        fun start/0,
+        fun stop/1,
+        fun add_test/1}. 
+
+add_test(_Fixture) ->
+    [ imetrics:add(many_incr) || _ <- lists:seq(1, 4) ],
+    [
+        ?_assertEqual(1, imetrics:add(atom)),
+        ?_assertEqual(5, imetrics:add(atom_set, 5)),
+        ?_assertEqual(1, imetrics:add(<<"binary">>)),
+        ?_assertEqual(5, imetrics:add(<<"binary_set">>, 5)),
+        ?_assertEqual(1, imetrics:add("list")),
+        ?_assertEqual(5, imetrics:add("list_set", 5)),
+        ?_assertEqual(1, imetrics:add_m(atom_m, atom_k)),
+        ?_assertEqual(5, imetrics:add_m(atom_m, atom_k_set, 5)),
+        ?_assertEqual(1, imetrics:add_m(<<"binary_m">>, <<"binary_k">>)),
+        ?_assertEqual(5, imetrics:add_m(<<"binary_m">>, <<"binary_k_set">>, 5)),
+        ?_assertEqual(1, imetrics:add_m("list_m", "list_k")),
+        ?_assertEqual(5, imetrics:add_m("list_m", "list_k_set", 5)),
+        ?_assertEqual(1, imetrics:add_m(atom_m, 200)),
+        ?_assertEqual(5, imetrics:add(many_incr)),
+        ?_assertEqual(1, imetrics:add({a,b,c})),
+        ?_assertEqual(1, imetrics:add(200)),
+        ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i}))
+    ].
+
+gauge_test_() ->
+    {setup,
+        fun start/0,
+        fun stop/1,
+        fun gauge_test/1}.
+
+gauge_test(_Fixture) ->
+    [ imetrics:set_gauge(many_set, X) || X <- lists:seq(1, 4) ],
+    F = 1.5,
+    [
+        ?_assertEqual(F, imetrics:set_gauge(atom, F)),
+        ?_assertEqual(F, imetrics:set_gauge_m(atom_m, atom_k, F)),
+        ?_assertEqual(F, imetrics:set_gauge(many_set, F))
+    ].
+
+%% badarg tests
+badarg_test_() ->
+    {setup,
+        fun() -> ok end,
+        fun(_) -> ok end,
+        fun badarg_test/1}.
+
+badarg_test(_Fixture) ->
+    % Make sure we don't crash if ets tables do not exist
+    [
+        ?_assertEqual({error,{badarg,check_ets}}, imetrics:add(atom)),
+        ?_assertEqual({error,{badarg,check_ets}}, imetrics:add_m(atom_m, k)),
+        ?_assertEqual({error,{badarg,check_ets}}, imetrics:set_gauge(atom_g, 1.5)),
+        ?_assertEqual({error,{badarg,check_ets}}, imetrics:set_gauge_m(atom_gm, k, 1.5))
+    ].
+
+
+%% get tests
+get_test_() ->
+    {setup,
+        fun start_get/0,
+        fun stop/1,
+        fun get_test/1}. 
+
+start_get() ->
+    F = start(),
+    imetrics:add(counter),
+    imetrics:add_m(mapped_counter, key),
+    imetrics:set_gauge(gauge, 1.5),
+    imetrics:set_gauge_m(mapped_gauge, key, 1.5),
+    imetrics:set_gauge(fn_gauge, fun() -> 1.5 end),
+    imetrics:add({counter, tuple}),
+    application:set_env(imetrics, separator, <<":">>),
+    imetrics:add({counter, tuple, colon}),
+    application:unset_env(imetrics, separator),
+    F.
+
+get_test(_Fixture) ->
+    Data = imetrics:get(),
+    [
+        ?_assertEqual(1, proplists:get_value(<<"counter">>, Data)),
+        ?_assertEqual([{<<"key">>, 1}],
+            proplists:get_value(<<"mapped_counter">>, Data)),
+        ?_assertEqual(1.5, proplists:get_value(<<"gauge">>, Data)),
+        ?_assertEqual([{<<"key">>, 1.5}],
+            proplists:get_value(<<"mapped_gauge">>, Data)),
+        ?_assertEqual(1.5, proplists:get_value(<<"fn_gauge">>, Data))
+    ].
+
+%% http tests
+http_test_() ->
+    {setup,
+        fun start_http/0,
+        fun stop/1,
+        fun http_test/1}. 
+
+start_http() ->
+    F = start_get(),
+    ok = imetrics_http_server:await(1000),
+    F.
+
+http_test(_Fixture) ->
+    Url = "http://localhost:8085/imetrics/varz:get",
+    {ok, {Status, _Headers, Body}} = 
+        httpc:request(get, {Url, []}, [], []),
+    {_Vsn, Code, _Friendly} = Status,
+
+    Res = ["counter 1",
+        "counter_tuple 1",
+        "counter:tuple:colon 1",
+        "fn_gauge 1.5",
+        "gauge 1.5",
+        "mapped_counter key:1",
+        "mapped_gauge key:1.5"],
+    Res2 = string:join(Res, "\n") ++ "\n",
+    [
+        ?_assertEqual(200, Code),
+        ?_assertEqual(Res2, Body)
+    ].

@@ -1,0 +1,13 @@
+{application, imetrics,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  inets
+                 ]},
+  {mod, { imetrics_app, []}},
+  {env, []}
+ ]}.
