@@ -35,7 +35,9 @@ add_test(_Fixture) ->
         ?_assertEqual(5, imetrics:add(many_incr)),
         ?_assertEqual(1, imetrics:add({a,b,c})),
         ?_assertEqual(1, imetrics:add(200)),
-        ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i}))
+        ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i})),
+        ?_assertEqual({error,{badmatch,check_inputs}}, imetrics:add(bad, map))
+
     ].
 
 gauge_test_() ->

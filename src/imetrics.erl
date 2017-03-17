@@ -17,7 +17,9 @@
             % metrics collecting to crash the application
             {error, {badarg, check_ets}};
         error:function_clause ->
-            {error, {function_clause, check_inputs}}
+            {error, {function_clause, check_inputs}};
+        error:{badmatch, false} ->
+            {error, {badmatch, check_inputs}}
     end).
 
 %% ---------------------------------------------------------
@@ -29,9 +31,10 @@
 add(Name) ->
     add(Name, 1).
 
-add(Name, Value) when is_integer(Value) ->
+add(Name, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
+            true = is_integer(Value),
             NameBin = bin(Name),
             ets:update_counter(imetrics_counters, NameBin, Value, {NameBin, 0})
         end
@@ -40,9 +43,10 @@ add(Name, Value) when is_integer(Value) ->
 add_m(Name, Key) ->
     add_m(Name, Key, 1).
 
-add_m(Name, Key, Value) when is_integer(Value) ->
+add_m(Name, Key, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
+            true = is_integer(Value),
             NameBin = bin(Name),
             KeyBin = bin(Key),
             Id = mapped_id(NameBin, KeyBin),
