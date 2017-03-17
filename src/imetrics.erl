@@ -19,7 +19,9 @@
         error:function_clause ->
             {error, {function_clause, check_inputs}};
         error:{badmatch, false} ->
-            {error, {badmatch, check_inputs}}
+            {error, {badmatch, check_inputs}};
+        error:undef ->
+            {error, {undef, check_erlang_vsn}}
     end).
 
 %% ---------------------------------------------------------
