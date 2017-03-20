@@ -1,5 +1,7 @@
 -module(imetrics).
 
+-include("../include/imetrics.hrl").
+
 -export([add/1, add/2, add_m/2, add_m/3]).
 
 -export([set_gauge/2, set_gauge_m/3]).
