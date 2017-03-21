@@ -6,6 +6,8 @@
 
 -export([set_gauge/2, set_gauge_m/3]).
 
+-export([hist/3, tick/1, tick/2, tock/1, tock/2]).
+
 -export([get/0]).
 
 -compile({no_auto_import,[get/0]}).
@@ -78,12 +80,44 @@ set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
         end
     ).
 
+hist(Name, Range=[_Min, _Max], NumBuckets) when is_atom(Name) andalso
+                                                is_integer(NumBuckets) ->
+    imetrics_hist:new(Name, Range, NumBuckets).
+
+tick(Name) when is_atom(Name) ->
+    tick(Name, microsecond).
+
+tick(Name, Unit) when is_atom(Name) ->
+    {Name, Unit, erlang:monotonic_time(Unit)}.
+
+tock(Tick) ->
+    tock(Tick,
+        fun(Name, Diff) ->
+                imetrics_hist:add(Name, Diff)
+        end).
+
+tock({Name, Unit, Ts}, Fun) when is_atom(Name) andalso
+                                 is_function(Fun) ->
+    Ts2 = erlang:monotonic_time(Unit),
+    Fun(Name, Ts2-Ts);
+tock(_, _) ->
+    {error, badarg}.
+
 get() ->
     Counters = get_unmapped(imetrics_counters),
     Gauges = get_unmapped(imetrics_gauges),
     MappedCounters = get_mapped(imetrics_mapped_counters),
     MappedGauges = get_mapped(imetrics_mapped_gauges),
-    Counters ++ Gauges ++ MappedCounters ++ MappedGauges.
+    StaticTables = Counters ++ Gauges ++ MappedCounters ++ MappedGauges,
+    DynamicTables = imetrics_ets_owner:dynamic_tables(),
+    DynamicData = lists:filtermap(fun(#{name := Name, module := Module}) ->
+                try
+                    {true, Module:get(Name)}
+                catch _:_ ->
+                    false
+            end
+    end, DynamicTables),
+    StaticTables ++ DynamicData.
     
 %% ---
 bin(V) when is_atom(V) ->

@@ -90,10 +90,16 @@ start_get() ->
     application:set_env(imetrics, separator, <<":">>),
     imetrics:add({counter, tuple, colon}),
     application:unset_env(imetrics, separator),
+
+    imetrics:hist(test_hist, [0, 1000], 50),
+    Tick = imetrics:tick(test_hist, millisecond),
+    timer:sleep(285),
+    imetrics:tock(Tick),
     F.
 
 get_test(_Fixture) ->
     Data = imetrics:get(),
+    HistData = proplists:get_value(<<"test_hist">>, Data),
     [
         ?_assertEqual(1, proplists:get_value(<<"counter">>, Data)),
         ?_assertEqual([{<<"key">>, 1}],
@@ -101,7 +107,9 @@ get_test(_Fixture) ->
         ?_assertEqual(1.5, proplists:get_value(<<"gauge">>, Data)),
         ?_assertEqual([{<<"key">>, 1.5}],
             proplists:get_value(<<"mapped_gauge">>, Data)),
-        ?_assertEqual(1.5, proplists:get_value(<<"fn_gauge">>, Data))
+        ?_assertEqual(1.5, proplists:get_value(<<"fn_gauge">>, Data)),
+        ?_assertEqual([0,1000,50,1], [ proplists:get_value(X, HistData)
+                || X <- [<<"m">>, <<"M">>, <<"n">>, <<"15">>] ])
     ].
 
 %% http tests
@@ -128,9 +136,31 @@ http_test(_Fixture) ->
         "fn_gauge 1.5",
         "gauge 1.5",
         "mapped_counter key:1",
-        "mapped_gauge key:1.5"],
+        "mapped_gauge key:1.5",
+        "test_hist 15:1 m:0 M:1000 n:50"],
     Res2 = string:join(Res, "\n") ++ "\n",
     [
         ?_assertEqual(200, Code),
         ?_assertEqual(Res2, Body)
+    ].
+
+%% tick/tock tests
+ticktock_test_() ->
+    {setup,
+        fun start_ticktock/0,
+        fun stop/1,
+        fun ticktock_test/1}. 
+
+start_ticktock() ->
+    F = start(),
+    imetrics:hist(test, [0, 1000], 50),
+    F.
+
+ticktock_test(_Fixture) ->
+    [
+        ?_assertEqual({15, 1}, (fun() ->
+                    Tick = imetrics:tick(test, millisecond),
+                    timer:sleep(285),
+                    imetrics:tock(Tick)
+            end)())
     ].

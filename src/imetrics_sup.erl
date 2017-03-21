@@ -20,15 +20,19 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    ets:new(imetrics_counters, [public, named_table]),
-    ets:new(imetrics_mapped_counters, [public, named_table]),
-    ets:new(imetrics_gauges, [public, named_table]),
-    ets:new(imetrics_mapped_gauges, [public, named_table]),
     SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
-    ChildSpecs = [#{id => imetrics_http_server,
+    ChildSpecs = [
+        #{id => imetrics_ets_owner,
+            start => {imetrics_ets_owner, start_link, []},
+            restart => permanent,
+            shutdown => 5000,
+            type => worker,
+            modules => [imetrics_ets_owner]},
+        #{id => imetrics_http_server,
             start => {imetrics_http_server, start_link, []},
             restart => permanent,
             shutdown => 5000,
             type => worker,
-            modules => [imetrics_http_server]}],
+            modules => [imetrics_http_server]}
+    ],
     {ok, {SupFlags, ChildSpecs}}.
