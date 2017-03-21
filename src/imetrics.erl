@@ -111,8 +111,11 @@ get() ->
     StaticTables = Counters ++ Gauges ++ MappedCounters ++ MappedGauges,
     DynamicTables = imetrics_ets_owner:dynamic_tables(),
     DynamicData = lists:filtermap(fun(#{name := Name, module := Module}) ->
-                try
-                    {true, Module:get(Name)}
+                try Module:get(Name) of
+                    {_, _}=Res ->
+                        {true, Res};
+                    _ ->
+                        false
                 catch _:_ ->
                     false
             end
