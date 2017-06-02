@@ -8,6 +8,8 @@
 
 -export([hist/3, tick/1, tick/2, tock/1, tock/2]).
 
+-export([stats/1, set_stats/2]).
+
 -export([get/0]).
 
 -compile({no_auto_import,[get/0]}).
@@ -80,6 +82,30 @@ set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
         end
     ).
 
+stats(Name) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           NameBin = bin(Name),
+           case ets:lookup(imetrics_stats, NameBin) of
+               [] ->
+                   Stats = imetrics_stats:new(),
+                   ets:insert(imetrics_stats, {NameBin, Stats}),
+                   Stats;
+               [Stats] ->
+                   Stats
+           end
+       end
+    ).
+
+set_stats(Name, Stats) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           NameBin = bin(Name),
+           ets:insert(imetrics_stats, {NameBin, Stats}),
+           Stats
+       end
+    ).
+
 hist(Name, Range=[_Min, _Max], NumBuckets) when is_atom(Name) andalso
                                                 is_integer(NumBuckets) ->
     imetrics_hist:new(Name, Range, NumBuckets).
@@ -106,9 +132,10 @@ tock(_, _) ->
 get() ->
     Counters = get_unmapped(imetrics_counters),
     Gauges = get_unmapped(imetrics_gauges),
+    Stats = get_unmapped(imetrics_stats),
     MappedCounters = get_mapped(imetrics_mapped_counters),
     MappedGauges = get_mapped(imetrics_mapped_gauges),
-    StaticTables = Counters ++ Gauges ++ MappedCounters ++ MappedGauges,
+    StaticTables = Counters ++ Gauges ++ MappedCounters ++ MappedGauges ++ Stats,
     DynamicTables = imetrics_ets_owner:dynamic_tables(),
     DynamicData = lists:filtermap(fun(#{name := Name, module := Module}) ->
                 try Module:get(Name) of
