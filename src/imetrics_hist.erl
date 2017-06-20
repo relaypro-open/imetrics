@@ -12,7 +12,7 @@
             {error, {badarg, check_ets}};
         error:badarith ->
             {error, {badarith, check_inputs}};
-        error:{noproc,{gen_server,call,_}} ->
+        exit:{noproc,{gen_server,call,_}} ->
             {error, {badarg, check_ets}}
     end).
 
