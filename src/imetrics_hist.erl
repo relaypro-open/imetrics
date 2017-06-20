@@ -11,7 +11,9 @@
         error:badarg ->
             {error, {badarg, check_ets}};
         error:badarith ->
-            {error, {badarith, check_inputs}}
+            {error, {badarith, check_inputs}};
+        error:{noproc,{gen_server,call,_}} ->
+            {error, {badarg, check_ets}}
     end).
 
 new(Name, Range, NumBuckets) when is_atom(Name) ->
