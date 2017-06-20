@@ -54,9 +54,14 @@ handle_call({dynamic_tables}, _From, State=#{dynamic_tables := Tables}) ->
 handle_call({new_ets_table, Module, Name, Options}, _From,
             State=#{n := N,
                     dynamic_tables := Tables}) ->
-    Res = ets:new(Name, Options),
-    {reply, Res, State#{n => N + 1,
-            dynamic_tables => Tables ++ [#{name => Name, module => Module}]}}.
+    case ets:info(Name, size) of
+        undefined ->
+            Res = ets:new(Name, Options),
+            {reply, Res, State#{n => N + 1,
+                    dynamic_tables => Tables ++ [#{name => Name, module => Module}]}};
+        _ ->
+            {reply, {error, already_exists}, State}
+    end.
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
