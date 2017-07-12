@@ -43,6 +43,7 @@ init([]) ->
     ets:new(imetrics_mapped_counters, [public, named_table]),
     ets:new(imetrics_gauges, [public, named_table]),
     ets:new(imetrics_mapped_gauges, [public, named_table]),
+    ets:new(imetrics_stats, [public, named_table]),
 
     {ok, #{ n => 4,
             dynamic_tables => [] }}.

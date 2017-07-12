@@ -74,6 +74,23 @@ Often, a gauge is a calculation based on some counter over time. For example,
 consider tracking `miles_driven` instead of `velocity`. You may find that your
 metrics are more flexible down the road.
 
+### Stats ###
+
+Stats is a map tracking stats about a collection of values without
+storing the actual values themselves. It tracks number of values, min
+value, max value, sum, and squared sum. Designed more for a single bulk
+update instead of rapid updates in succession.
+
+```
+% retrieve/create named stats
+Stats = imetrics:stats(ievent_expiration_jobs),
+% for each expiration job, update stats in memory
+Stats2 = imetrics_stats:update(ExecutionTime, Stats),
+...
+% store the result in ets
+imetrics:set_stats(ievent_expiration_jobs, Stats2)
+```
+
 ### Allowed types ###
 imetrics will normalize any Name and Key input to the add and set_gauge
 functions to a binary string. The Name and Key needs to match one of these
