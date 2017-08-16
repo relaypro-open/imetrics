@@ -166,9 +166,16 @@ bin(T) when is_tuple(T) andalso tuple_size(T) =< 8 ->
 mapped_id(Name, Key) when is_binary(Name), is_binary(Key) ->
     {Name, Key}.
 
+call_metrics_fun(Fun) ->
+    try
+        Fun()
+    catch _:_ ->
+              -1
+    end.
+
 get_unmapped(T) ->
     Acc = ets:foldl(fun({Name, Value}, Acc0) ->
-                Value2 = if is_function(Value) -> Value();
+                Value2 = if is_function(Value) -> call_metrics_fun(Value);
                     true -> Value
                 end,
                 [{Name, Value2}|Acc0]
@@ -178,7 +185,7 @@ get_unmapped(T) ->
 
 get_mapped(T) ->
     MappedDict = ets:foldl(fun({{Name, Key}, Value}, MappedDict0) ->
-                Value2 = if is_function(Value) -> Value();
+                Value2 = if is_function(Value) -> call_metrics_fun(Value);
                     true -> Value
                 end,
                 orddict:append_list(Name, [{Key, Value2}], MappedDict0)
