@@ -48,9 +48,9 @@ percentiles_test_() ->
      fun percentiles_test/1}.
 
 percentiles_test(_) ->
-    imetrics_hist:new(percentiles_test, [0, 100], 10),
+    imetrics_hist:new({percentiles, test}, [0, 100], 10),
     [
      ?_assertEqual([], element(2, imetrics:get_hist_percentiles(test, 1))),
      ?_assertEqual([{<<"percentiles_test">>, [{<<"0.1">>,55.0},{<<"0.5">>,55.0},{<<"0.9">>,55.0}]}],
-                   fun() -> imetrics_hist:add(percentiles_test, 55), element(2, imetrics:get_hist_percentiles(test, 1)) end())
+                   fun() -> imetrics_hist:add({percentiles, test}, 55), element(2, imetrics:get_hist_percentiles(test, 1)) end())
     ].
