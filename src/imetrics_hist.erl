@@ -1,6 +1,6 @@
 -module(imetrics_hist).
 
--export([new/3, add/2, dump/1, get/1, subtract/2,
+-export([new/3, add/2, dump/1, get/1, get_all/0, subtract/2,
         approximate_percentiles/2]).
 
 -export([compute_bucket/3]).
@@ -17,50 +17,75 @@
             {error, {badarg, check_ets}}
     end).
 
-new(Name, Range, NumBuckets) when is_atom(Name) ->
+new(Name, Range, NumBuckets) ->
     ?CATCH_KNOWN_EXC(
         begin
-            InternalName = internal_name(Name),
-            imetrics_ets_owner:new_ets_table(?MODULE, InternalName,
-                [public, named_table]),
-            ets:insert(InternalName, {metadata, Range, NumBuckets})
+            ets:insert(?MODULE, {{Name, metadata}, Range, NumBuckets})
         end
     ).
 
 dump(Name) ->
     ?CATCH_KNOWN_EXC(
         begin
-            InternalName = internal_name(Name),
-            ets:tab2list(InternalName)
+            ets:foldr(
+              fun(Element, Acc) ->
+                case element(1, Element) of
+                    {N, _} when N =:= Name ->
+                        [Element|Acc];
+                    _ ->
+                        Acc
+                end
+              end, [], ?MODULE)
         end
     ).
+
+get_all() ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           Map = ets:foldl(
+             fun({{N, metadata}, [Min, Max], NumBuckets}, A) ->
+                     NBin = imetrics_utils:bin(N),
+                     NData = maps:get(NBin, A, []),
+                     A#{ NBin => [{<<"m">>, Min},
+                               {<<"M">>, Max},
+                               {<<"n">>, NumBuckets}|NData] };
+                ({{N, Bucket}, Count}, A) ->
+                     NBin = imetrics_utils:bin(N),
+                     NData = maps:get(NBin, A, []),
+                     A#{ NBin => [{integer_to_binary(Bucket), Count}|NData] };
+                (_, A) ->
+                     A
+             end, #{}, ?MODULE),
+           maps:to_list(Map)
+       end
+      ).
 
 get(Name) ->
     ?CATCH_KNOWN_EXC(
         begin
-            InternalName = internal_name(Name),
             Data = ets:foldr(
                 fun
-                    ({metadata, [Min, Max], NumBuckets}, A) ->
+                    ({{N, metadata}, [Min, Max], NumBuckets}, A) when N =:= Name ->
                         [{<<"m">>, Min},
                          {<<"M">>, Max},
                          {<<"n">>, NumBuckets}|A];
-                    ({Bucket, Count}, A) ->
-                        [{integer_to_binary(Bucket), Count}|A]
+                    ({{N, Bucket}, Count}, A) when N =:= Name ->
+                        [{integer_to_binary(Bucket), Count}|A];
+                    (_, A) ->
+                        A
                 end,
-                [], InternalName),
-            BinName = atom_to_binary(external_name(Name), utf8),
+                [], ?MODULE),
+            BinName = imetrics_utils:bin(Name),
             {BinName, Data}
         end
     ).
 
-add(Name, Value) when is_atom(Name) ->
+add(Name, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
-            InternalName = internal_name(Name),
-            {Range, NumBuckets} = metadata(InternalName),
+            {Range, NumBuckets} = metadata(Name),
             BucketPos = compute_bucket(Range, NumBuckets, Value),
-            Counter = ets:update_counter(InternalName, BucketPos, 1, {BucketPos, 0}),
+            Counter = ets:update_counter(?MODULE, {Name, BucketPos}, 1, {{Name, BucketPos}, 0}),
             {BucketPos, Counter}
         end
     ).
@@ -168,26 +193,12 @@ describe(H) ->
          nzmax => NonZeroMax,
          buckets => lists:sort(Buckets)}.
 
-metadata(InternalName) ->
-    case ets:lookup(InternalName, metadata) of
+metadata(Name) ->
+    case ets:lookup(?MODULE, {Name, metadata}) of
         [{_, Range, NumBuckets}] ->
-            {Range, NumBuckets}
-    end.
-
-internal_name(Name) ->
-    case atom_to_list(Name) of
-        ?MODULE_STRING ++ _ ->
-            Name;
-        NameStr ->
-            list_to_atom(?MODULE_STRING ++ NameStr)
-    end.
-
-external_name(Name) ->
-    case atom_to_list(Name) of
-        ?MODULE_STRING ++ Ex ->
-            list_to_atom(Ex);
+            {Range, NumBuckets};
         _ ->
-            Name
+            erlang:error(badarg)
     end.
 
 compute_bucket([Min, _Max], _NumBuckets, Value) when Value < Min ->

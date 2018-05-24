@@ -45,7 +45,7 @@ add(Name, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
             true = is_integer(Value),
-            NameBin = bin(Name),
+            NameBin = imetrics_utils:bin(Name),
             ets:update_counter(imetrics_counters, NameBin, Value, {NameBin, 0})
         end
     ).
@@ -57,8 +57,8 @@ add_m(Name, Key, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
             true = is_integer(Value),
-            NameBin = bin(Name),
-            KeyBin = bin(Key),
+            NameBin = imetrics_utils:bin(Name),
+            KeyBin = imetrics_utils:bin(Key),
             Id = mapped_id(NameBin, KeyBin),
             ets:update_counter(imetrics_mapped_counters, Id, Value, {Id, 0})
         end
@@ -67,7 +67,7 @@ add_m(Name, Key, Value) ->
 set_gauge(Name, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
-            NameBin = bin(Name),
+            NameBin = imetrics_utils:bin(Name),
             ets:insert(imetrics_gauges, {NameBin, Value}),
             Value
         end
@@ -76,8 +76,8 @@ set_gauge(Name, Value) ->
 set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
     ?CATCH_KNOWN_EXC(
         begin
-            NameBin = bin(Name),
-            KeyBin = bin(Key),
+            NameBin = imetrics_utils:bin(Name),
+            KeyBin = imetrics_utils:bin(Key),
             Id = mapped_id(NameBin, KeyBin),
             ets:insert(imetrics_mapped_gauges, {Id, Value}),
             Value
@@ -87,7 +87,7 @@ set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
 stats(Name) ->
     ?CATCH_KNOWN_EXC(
        begin
-           NameBin = bin(Name),
+           NameBin = imetrics_utils:bin(Name),
            case ets:lookup(imetrics_stats, NameBin) of
                [] ->
                    Stats = imetrics_stats:new(),
@@ -102,7 +102,7 @@ stats(Name) ->
 set_stats(Name, Stats) ->
     ?CATCH_KNOWN_EXC(
        begin
-           NameBin = bin(Name),
+           NameBin = imetrics_utils:bin(Name),
            ets:insert(imetrics_stats, {NameBin, Stats}),
            Stats
        end
@@ -150,9 +150,7 @@ get_gauges() ->
     Gauges ++ MappedGauges.
 
 get_hist() ->
-    HistTables = imetrics_ets_owner:dynamic_tables_by_module(imetrics_hist),
-    Data = get_dynamic_table_data(HistTables),
-    Data.
+    imetrics_hist:get_all().
 
 get_hist_percentiles(Key, E) ->
     PercentileList = lists:flatten(percentile_list(E)),
@@ -225,33 +223,8 @@ clean_checkpoints() ->
              end, [], imetrics_data_checkpoint),
            [ ets:delete(imetrics_data_checkpoint, X) || X <- ExpiredKeys ]
        end).
-
-get_dynamic_table_data(DynamicTables) ->
-    DynamicData = lists:filtermap(fun(#{name := Name, module := Module}) ->
-                try Module:get(Name) of
-                    {_, _}=Res ->
-                        {true, Res};
-                    _ ->
-                        false
-                catch _:_ ->
-                    false
-            end
-    end, DynamicTables),
-    DynamicData.
     
 %% ---
-bin(V) when is_atom(V) ->
-    bin(atom_to_list(V));
-bin(V) when is_list(V) ->
-    list_to_binary(V);
-bin(V) when is_binary(V) ->
-    V;
-bin(V) when is_integer(V) ->
-    bin(integer_to_list(V));
-bin(T) when is_tuple(T) andalso tuple_size(T) =< 8 ->
-    L = tuple_to_list(T),
-    L2 = [ bin(X) || X <- L ],
-    binary_join(L2, application:get_env(imetrics, separator, <<"_">>)).
 
 mapped_id(Name, Key) when is_binary(Name), is_binary(Key) ->
     {Name, Key}.
@@ -282,16 +255,3 @@ get_mapped(T) ->
         end, orddict:new(),
         T),
     orddict:to_list(MappedDict).
-
--spec binary_join([binary()], binary()) -> binary().
-binary_join([], _Sep) ->
-    <<>>;
-binary_join([Part], _Sep) ->
-    Part;
-binary_join(List, Sep) ->
-    lists:foldr(fun (A, B) ->
-                if
-                    bit_size(B) > 0 -> <<A/binary, Sep/binary, B/binary>>;
-                    true -> A
-                end
-        end, <<>>, List).

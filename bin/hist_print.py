@@ -55,7 +55,7 @@ class hist_print():
         return
 
     def get_imetrics(self, name, use_interval, interval):
-        r = requests.get('http://localhost:8085/imetrics/varz:get')
+        r = requests.get('http://localhost:8085/imetrics/varz:hist')
         match = re.search('^'+name+' (.*)$', r.text, flags=re.MULTILINE)
         hist_line = match.group(1)
         split = string.split(hist_line)
