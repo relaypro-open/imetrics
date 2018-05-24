@@ -108,14 +108,13 @@ set_stats(Name, Stats) ->
        end
     ).
 
-hist(Name, Range=[_Min, _Max], NumBuckets) when is_atom(Name) andalso
-                                                is_integer(NumBuckets) ->
+hist(Name, Range=[_Min, _Max], NumBuckets) when is_integer(NumBuckets) ->
     imetrics_hist:new(Name, Range, NumBuckets).
 
-tick(Name) when is_atom(Name) ->
+tick(Name) ->
     tick(Name, microsecond).
 
-tick(Name, Unit) when is_atom(Name) ->
+tick(Name, Unit) ->
     {Name, Unit, erlang:monotonic_time(Unit)}.
 
 tock(Tick) ->
@@ -124,8 +123,7 @@ tock(Tick) ->
                 imetrics_hist:add(Name, Diff)
         end).
 
-tock({Name, Unit, Ts}, Fun) when is_atom(Name) andalso
-                                 is_function(Fun) ->
+tock({Name, Unit, Ts}, Fun) when is_function(Fun) ->
     Ts2 = erlang:monotonic_time(Unit),
     Fun(Name, Ts2-Ts);
 tock(_, _) ->
