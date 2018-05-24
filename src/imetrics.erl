@@ -164,9 +164,13 @@ get_hist_percentiles(Key, E) ->
                                              false;
                                          HistDataA ->
                                              Diff = imetrics_hist:subtract(HistDataB, HistDataA),
-                                             Percentiles = imetrics_hist:approximate_percentiles(Diff,
-                                                                PercentileList),
-                                             {true, {HistName, Percentiles}}
+                                             case imetrics_hist:approximate_percentiles(Diff,
+                                                                PercentileList) of
+                                                 [] ->
+                                                     false;
+                                                 Percentiles ->
+                                                    {true, {HistName, Percentiles}}
+                                             end
                                      end
                              end, NowHistData),
             {Now-CheckpointTime, IntervalData};
