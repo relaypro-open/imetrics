@@ -40,3 +40,17 @@ misuse_test(_) ->
         ?_assertEqual({error,{badarg,check_ets}}, imetrics_hist:add(dne, 5.5)),
         ?_assertEqual({error,{badarith,check_inputs}}, imetrics_hist:add(div0, 0.4))
     ].
+
+percentiles_test_() ->
+    {setup,
+     fun start/0,
+     fun stop/1,
+     fun percentiles_test/1}.
+
+percentiles_test(_) ->
+    imetrics_hist:new(percentiles_test, [0, 100], 10),
+    [
+     ?_assertEqual([], element(2, imetrics:get_hist_percentiles(test, 1))),
+     ?_assertEqual([{<<"percentiles_test">>, [{<<"0.1">>,55.0},{<<"0.5">>,55.0},{<<"0.9">>,55.0}]}],
+                   fun() -> imetrics_hist:add(percentiles_test, 55), element(2, imetrics:get_hist_percentiles(test, 1)) end())
+    ].

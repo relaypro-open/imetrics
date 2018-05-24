@@ -10,7 +10,9 @@
 
 -export([stats/1, set_stats/2]).
 
--export([get/0]).
+-export([get/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2]).
+
+-export([clean_checkpoints/0]).
 
 -compile({no_auto_import,[get/0]}).
 
@@ -137,6 +139,97 @@ get() ->
     MappedGauges = get_mapped(imetrics_mapped_gauges),
     StaticTables = Counters ++ Gauges ++ MappedCounters ++ MappedGauges ++ Stats,
     DynamicTables = imetrics_ets_owner:dynamic_tables(),
+    DynamicData = get_dynamic_table_data(DynamicTables),
+    StaticTables ++ DynamicData.
+
+get_counters() ->
+    Counters = get_unmapped(imetrics_counters),
+    MappedCounters = get_mapped(imetrics_mapped_counters),
+    Counters ++ MappedCounters.
+
+get_gauges() ->
+    Gauges = get_unmapped(imetrics_gauges),
+    MappedGauges = get_mapped(imetrics_mapped_gauges),
+    Gauges ++ MappedGauges.
+
+get_hist() ->
+    HistTables = imetrics_ets_owner:dynamic_tables_by_module(imetrics_hist),
+    Data = get_dynamic_table_data(HistTables),
+    Data.
+
+get_hist_percentiles(Key, E) ->
+    PercentileList = lists:flatten(percentile_list(E)),
+    Now = erlang:monotonic_time(millisecond),
+    NowHistData = get_hist(),
+    case get_checkpoint({hist_percentiles, Key}) of
+        {ok, CheckpointData, CheckpointTime} ->
+            set_checkpoint({hist_percentiles, Key}, NowHistData, Now),
+            IntervalData = lists:filtermap(
+                             fun({HistName, HistDataB}) ->
+                                     case proplists:get_value(HistName, CheckpointData) of
+                                         undefined ->
+                                             false;
+                                         HistDataA ->
+                                             Diff = imetrics_hist:subtract(HistDataB, HistDataA),
+                                             Percentiles = imetrics_hist:approximate_percentiles(Diff,
+                                                                PercentileList),
+                                             {true, {HistName, Percentiles}}
+                                     end
+                             end, NowHistData),
+            {Now-CheckpointTime, IntervalData};
+        {error, not_found} ->
+            set_checkpoint({hist_percentiles, Key}, NowHistData, Now),
+            {0, []}
+    end.
+
+% hard coded to avoid floating point error
+percentile_list(E) when E < 1 -> [0.5];
+percentile_list(1) -> [0.1, percentile_list(0), 0.9];
+percentile_list(2) -> [0.01, percentile_list(1), 0.99];
+percentile_list(3) -> [0.001, percentile_list(2), 0.999];
+percentile_list(4) -> [0.0001, percentile_list(3), 0.9999];
+percentile_list(5) -> [0.00001, percentile_list(4), 0.99999];
+percentile_list(6) -> [0.000001, percentile_list(5), 0.999999];
+percentile_list(7) -> [0.0000001, percentile_list(6), 0.9999999];
+percentile_list(8) -> [0.00000001, percentile_list(7), 0.99999999];
+percentile_list(9) -> [0.000000001, percentile_list(8), 0.999999999];
+percentile_list(_) -> percentile_list(9).
+
+set_checkpoint(Key, Data, Now) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+            ets:insert(imetrics_data_checkpoint,
+                       {Key, Data, Now})
+       end).
+
+get_checkpoint(Key) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+            case ets:lookup(imetrics_data_checkpoint, Key) of
+                [{_, Data, Time}] ->
+                    {ok, Data, Time};
+                _ ->
+                    {error, not_found}
+            end
+       end).
+
+clean_checkpoints() ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           MaxAgeHr = application:get_env(imetrics, checkpoint_max_age_hr, 12),
+           Expired = erlang:monotonic_time(millisecond) - timer:hours(MaxAgeHr),
+           ExpiredKeys = ets:foldl(
+             fun({Key, _, Time}, Acc) ->
+                     if Time < Expired ->
+                            [Key|Acc];
+                        true ->
+                            Acc
+                     end
+             end, [], imetrics_data_checkpoint),
+           [ ets:delete(imetrics_data_checkpoint, X) || X <- ExpiredKeys ]
+       end).
+
+get_dynamic_table_data(DynamicTables) ->
     DynamicData = lists:filtermap(fun(#{name := Name, module := Module}) ->
                 try Module:get(Name) of
                     {_, _}=Res ->
@@ -147,7 +240,7 @@ get() ->
                     false
             end
     end, DynamicTables),
-    StaticTables ++ DynamicData.
+    DynamicData.
     
 %% ---
 bin(V) when is_atom(V) ->

@@ -7,7 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([start_link/0, new_ets_table/3, num_ets_tables/0,
-        dynamic_tables/0]).
+        dynamic_tables/0, dynamic_tables_by_module/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -33,6 +33,9 @@ num_ets_tables() ->
 dynamic_tables() ->
     gen_server:call(?SERVER, {dynamic_tables}, infinity).
 
+dynamic_tables_by_module(Module) ->
+    gen_server:call(?SERVER, {dynamic_tables_by_module, Module}, infinity).
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -44,6 +47,11 @@ init([]) ->
     ets:new(imetrics_gauges, [public, named_table]),
     ets:new(imetrics_mapped_gauges, [public, named_table]),
     ets:new(imetrics_stats, [public, named_table]),
+    ets:new(imetrics_data_checkpoint, [public, named_table]),
+
+    ExpireCheckpointIntervalHr = application:get_env(imetrics, expire_checkpoint_interval_hr, 1),
+    timer:apply_interval(timer:hours(ExpireCheckpointIntervalHr),
+                         imetrics, clean_checkpoints, []),
 
     {ok, #{ n => 4,
             dynamic_tables => [] }}.
@@ -52,6 +60,14 @@ handle_call({num_ets_tables}, _From, State=#{n := N}) ->
     {reply, N, State};
 handle_call({dynamic_tables}, _From, State=#{dynamic_tables := Tables}) ->
     {reply, Tables, State};
+handle_call({dynamic_tables_by_module, Module}, _From, State=#{dynamic_tables := Tables}) ->
+    Reply = lists:filter(
+      fun(#{module := M}) when Module =:= M ->
+              true;
+         (_) ->
+              false
+      end, Tables),
+    {reply, Reply, State};
 handle_call({new_ets_table, Module, Name, Options}, _From,
             State=#{n := N,
                     dynamic_tables := Tables}) ->
