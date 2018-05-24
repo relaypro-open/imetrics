@@ -137,10 +137,7 @@ get() ->
     Stats = get_unmapped(imetrics_stats),
     MappedCounters = get_mapped(imetrics_mapped_counters),
     MappedGauges = get_mapped(imetrics_mapped_gauges),
-    StaticTables = Counters ++ Gauges ++ MappedCounters ++ MappedGauges ++ Stats,
-    DynamicTables = imetrics_ets_owner:dynamic_tables(),
-    DynamicData = get_dynamic_table_data(DynamicTables),
-    StaticTables ++ DynamicData.
+    Counters ++ Gauges ++ MappedCounters ++ MappedGauges ++ Stats.
 
 get_counters() ->
     Counters = get_unmapped(imetrics_counters),
