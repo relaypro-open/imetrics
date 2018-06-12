@@ -21,18 +21,22 @@ start_link() ->
 
 init([]) ->
     SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
-    ChildSpecs = [
-        #{id => imetrics_ets_owner,
+    EtsOwner = #{id => imetrics_ets_owner,
             start => {imetrics_ets_owner, start_link, []},
             restart => permanent,
             shutdown => 5000,
             type => worker,
             modules => [imetrics_ets_owner]},
-        #{id => imetrics_http_server,
-            start => {imetrics_http_server, start_link, []},
-            restart => permanent,
-            shutdown => 5000,
-            type => worker,
-            modules => [imetrics_http_server]}
-    ],
+    HttpSpecs = case application:get_env(imetrics, require_http_server_on_startup) of
+                    {ok, false} ->
+                        [];
+                    _ ->
+                        [#{id => imetrics_http_server,
+                          start => {imetrics_http_server, start_link, []},
+                          restart => permanent,
+                          shutdown => 5000,
+                          type => worker,
+                          modules => [imetrics_http_server]}]
+                end,
+    ChildSpecs = [EtsOwner] ++ HttpSpecs,
     {ok, {SupFlags, ChildSpecs}}.
