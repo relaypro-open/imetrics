@@ -2,6 +2,8 @@
 
 -export([get/3, counters/3, gauges/3, hist/3, hist_percentiles/3]).
 
+-compile(nowarn_deprecated_function). % get_stacktrace
+
 get(SessionId, Headers, ReqBody) ->
     handle(SessionId, Headers, ReqBody, fun imetrics:get/0).
 
