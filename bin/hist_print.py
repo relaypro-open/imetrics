@@ -42,7 +42,7 @@ class hist():
             if val_max > 0:
                 bucket_count = int(round((max_width * val) / val_max))
             bar = '#' * bucket_count
-            if bucket_count == 0 and val > 0
+            if bucket_count == 0 and val > 0:
                 bar = '.'
             bucket_desc = (x-1) * (self.ma-self.mi) / self.num
             if x == 0:
