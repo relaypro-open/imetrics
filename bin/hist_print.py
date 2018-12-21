@@ -38,9 +38,12 @@ class hist():
         s = ""
         for x in range(0, self.num+2):
             bucket_count = 0
+            val = self.data.get(x, 0)
             if val_max > 0:
-                bucket_count = int(round((max_width * self.data.get(x, 0)) / val_max))
+                bucket_count = int(round((max_width * val) / val_max))
             bar = '#' * bucket_count
+            if bucket_count == 0 and val > 0
+                bar = '.'
             bucket_desc = (x-1) * (self.ma-self.mi) / self.num
             if x == 0:
                 bucket_desc = float('nan')
