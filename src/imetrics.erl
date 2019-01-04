@@ -4,7 +4,7 @@
 
 -export([add/1, add/2, add_m/2, add_m/3]).
 
--export([set_gauge/2, set_gauge_m/3]).
+-export([set_gauge/2, set_gauge_m/3, set_multigauge/2]).
 
 -export([hist/3, tick/1, tick/2, tock/1, tock/2]).
 
@@ -83,6 +83,15 @@ set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
             Value
         end
     ).
+
+set_multigauge(Name, Fun) when is_function(Fun) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           NameBin = imetrics_utils:bin(Name),
+           ets:insert(imetrics_mapped_gauges, {NameBin, Fun}),
+           Fun
+       end
+      ).
 
 stats(Name) ->
     ?CATCH_KNOWN_EXC(
@@ -249,11 +258,19 @@ get_unmapped(T) ->
     lists:reverse(Acc).
 
 get_mapped(T) ->
-    MappedDict = ets:foldl(fun({{Name, Key}, Value}, MappedDict0) ->
-                Value2 = if is_function(Value) -> call_metrics_fun(Value);
-                    true -> Value
-                end,
-                orddict:append_list(Name, [{Key, Value2}], MappedDict0)
-        end, orddict:new(),
-        T),
+    MappedDict = ets:foldl(
+                   fun({{Name, Key}, Value}, MappedDict0) ->
+                           Value2 = if is_function(Value) -> call_metrics_fun(Value);
+                                       true -> Value
+                                    end,
+                           orddict:append_list(Name, [{Key, Value2}], MappedDict0);
+                      ({Name, Value}, MappedDict0) when is_function(Value) ->
+                           % multigauge
+                           List = call_metrics_fun(Value),
+                           List2 = lists:map(fun({K0, V0}) -> {imetrics_utils:bin(K0), V0} end, List),
+                           orddict:append_list(Name, List2, MappedDict0);
+                      (_, MappedDict0) ->
+                           MappedDict0
+                   end, orddict:new(),
+                   T),
     orddict:to_list(MappedDict).
