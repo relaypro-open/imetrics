@@ -4,7 +4,7 @@
 
 -export([add/1, add/2, add_m/2, add_m/3]).
 
--export([set_gauge/2, set_gauge_m/3, set_multigauge/2]).
+-export([set_gauge/2, set_gauge_m/3, set_multigauge/2, set_multigauge/3]).
 
 -export([hist/3, tick/1, tick/2, tock/1, tock/2]).
 
@@ -85,10 +85,22 @@ set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
     ).
 
 set_multigauge(Name, Fun) when is_function(Fun) ->
+    set_multigauge(Name, multigauge, Fun).
+
+set_multigauge(Name, Dimension, Fun) when is_function(Fun)
+                                          andalso is_atom(Dimension) ->
     ?CATCH_KNOWN_EXC(
        begin
+           WrappedFun = fun() ->
+                                case call_metrics_fun(Fun) of
+                                    List when is_list(List) ->
+                                        [{<<"$dim">>, imetrics_utils:bin(Dimension)}|List];
+                                    Other ->
+                                        Other
+                                end
+                        end,
            NameBin = imetrics_utils:bin(Name),
-           ets:insert(imetrics_mapped_gauges, {NameBin, Fun}),
+           ets:insert(imetrics_mapped_gauges, {NameBin, WrappedFun}),
            Fun
        end
       ).

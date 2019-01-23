@@ -98,7 +98,9 @@ deliver_data(SessionId, Data) ->
 
 serialize_proplist(List) ->
     MIo = lists:map(
-            fun({Key, Value}) when is_number(Value); Value =:= 'NaN' ->
+            fun({Key= <<"$dim">>, VStr}) ->
+                    [Key, ":", VStr];
+               ({Key, Value}) when is_number(Value); Value =:= 'NaN' ->
                     VStr = strnum(Value),
                     [Key, ":", VStr]
             end, List),
