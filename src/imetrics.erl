@@ -190,7 +190,7 @@ get_hist_percentiles(Key, E) ->
                                                  [] ->
                                                      false;
                                                  Percentiles ->
-                                                    {true, {HistName, Percentiles}}
+                                                    {true, {HistName, [{<<"$dim">>, <<"pctile">>}|Percentiles]}}
                                              end
                                      end
                              end, NowHistData),
