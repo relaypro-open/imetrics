@@ -65,6 +65,19 @@ multigauge_test(_) ->
      ?_assertEqual([{<<"$dim">>,<<"dim">>},{<<"test">>,3}], proplists:get_value(<<"multigauge_test">>, Gauges))
     ].
 
+dimension_test_() ->
+    {setup, fun start/0, fun stop/1, fun dimension_test/1}.
+
+dimension_test(_) ->
+    imetrics:set_counter_dimension(dimension_test1, dim1),
+    imetrics:add_m(dimension_test2, key2),
+    imetrics:set_counter_dimension(dimension_test2, dim2),
+    [
+     ?_assertEqual([{<<"dimension_test1">>,[{<<"$dim">>,<<"dim1">>}]},
+                  {<<"dimension_test2">>,
+                   [{<<"$dim">>,<<"dim2">>},{<<"key2">>,1}]}], imetrics:get_counters())
+    ].
+
 %% badarg tests
 badarg_test_() ->
     {setup,
