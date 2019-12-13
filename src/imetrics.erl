@@ -291,7 +291,12 @@ get_mapped(T) ->
                            Value2 = if is_function(Value) -> call_metrics_fun(Value);
                                        true -> Value
                                     end,
-                           orddict:append_list(Name, [{Key, Value2}], MappedDict0);
+                           if Key =:= <<"$dim">> ->
+                                  %% always ensure the special $dim field is the first in the list
+                                  imetrics_utils:orddict_prepend_list(Name, [{Key, Value2}], MappedDict0);
+                              true ->
+                                  orddict:append_list(Name, [{Key, Value2}], MappedDict0)
+                           end;
                       ({Name, Value}, MappedDict0) when is_function(Value) ->
                            % multigauge
                            List = call_metrics_fun(Value),
@@ -302,3 +307,4 @@ get_mapped(T) ->
                    end, orddict:new(),
                    T),
     orddict:to_list(MappedDict).
+

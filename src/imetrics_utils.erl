@@ -1,6 +1,6 @@
 -module(imetrics_utils).
 
--export([bin/1]).
+-export([bin/1, orddict_prepend_list/3]).
 
 bin(V) when is_atom(V) ->
     bin(atom_to_list(V));
@@ -27,3 +27,11 @@ binary_join(List, Sep) ->
                     true -> A
                 end
         end, <<>>, List).
+
+orddict_prepend_list(Key, ValList, Orddict1) ->
+    case orddict:find(Key, Orddict1) of
+        {ok, Value} when is_list(Value) ->
+            orddict:store(Key, ValList ++ Value, Orddict1);
+        error ->
+            orddict:append_list(Key, ValList, Orddict1)
+    end.
