@@ -55,6 +55,16 @@ gauge_test(_Fixture) ->
         ?_assertEqual(F, imetrics:set_gauge(many_set, F))
     ].
 
+multigauge_test_() ->
+    {setup, fun start/0, fun stop/1, fun multigauge_test/1}.
+
+multigauge_test(_) ->
+    imetrics:set_multigauge(multigauge_test, dim, fun() -> [{<<"test">>, 3}] end),
+    Gauges = imetrics:get_gauges(),
+    [
+     ?_assertEqual([{<<"$dim">>,<<"dim">>},{<<"test">>,3}], proplists:get_value(<<"multigauge_test">>, Gauges))
+    ].
+
 %% badarg tests
 badarg_test_() ->
     {setup,
