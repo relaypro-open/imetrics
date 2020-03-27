@@ -91,13 +91,18 @@ add(Name, Value) ->
     ).
 
 subtract(B, A) ->
-    lists:map(
+    lists:filtermap(
       fun ({K, V}) when K =:= <<"m">> orelse
                         K =:= <<"M">> orelse
                         K =:= <<"n">> ->
-              {K, V};
+              {true, {K, V}};
           ({K,V}) ->
-              {K, V - proplists:get_value(K, A, 0)}
+              V2 = V - proplists:get_value(K, A, 0),
+              if V2 =< 0 ->
+                     false;
+                 true ->
+                     {true, {K, V2}}
+              end
       end, B).
 
 % @doc Uses the histogram data to compute approximate percentile
@@ -169,6 +174,7 @@ describe(H) ->
                    buckets => [{binary_to_integer(K), V}|Buckets]}
       end, #{sum => 0, buckets => []}, H),
     SortedBuckets = lists:sort(Buckets),
+    %io:format("sorted buckets=~p~n", [SortedBuckets]),
     {NonZeroMin, NonZeroMax} = case lists:foldl(
                                       fun({K, V}, {Bm, _BM}) when Bm =:= undefined andalso
                                                                  V > 0 ->
@@ -183,15 +189,15 @@ describe(H) ->
                                        % all buckets are empty
                                        {undefined, undefined};
                                    {BMin, BMax} ->
-                                       [A0,A1] = compute_bounding_value([Min, Max], N, BMin),
-                                       %io:format("nzmin bmin=~p, b0=~p, b1=~p~n", [BMin, A0, A1]),
-                                       [B0,B1] = compute_bounding_value([Min, Max], N, BMax),
-                                       %io:format("nzmax bmax=~p, b0=~p, b1=~p~n", [BMax, B0, B1]),
-                                       {(A0+A1)/2, (B0+B1)/2}
+                                       [A0,_A1] = compute_bounding_value([Min, Max], N, BMin),
+                                       %io:format("nzmin bmin=~p, b0=~p, b1=~p~n", [BMin, A0, _A1]),
+                                       [_B0,B1] = compute_bounding_value([Min, Max], N, BMax),
+                                       %io:format("nzmax bmax=~p, b0=~p, b1=~p~n", [BMax, _B0, B1]),
+                                       {A0/1.0, B1/1.0}
                                end,
     Map#{nzmin => NonZeroMin,
          nzmax => NonZeroMax,
-         buckets => lists:sort(Buckets)}.
+         buckets => SortedBuckets}.
 
 metadata(Name) ->
     case ets:lookup(?MODULE, {Name, metadata}) of
@@ -201,7 +207,7 @@ metadata(Name) ->
             erlang:error(badarg)
     end.
 
-compute_bucket([Min, _Max], _NumBuckets, Value) when Value < Min ->
+compute_bucket([Min, _Max], _NumBuckets, Value) when Value =< Min ->
     0;
 compute_bucket([_Min, Max], NumBuckets, Value) when Value >= Max ->
     NumBuckets+1;

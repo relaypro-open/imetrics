@@ -16,7 +16,7 @@ compute_bucket_test_() ->
         {6, [0, 10], 10, 5.5},
         {10, [0, 10], 10, 9.9999},
 
-        {1, [0, 1000], 50, 0},
+        {0, [0, 1000], 50, 0},
         {1, [0, 1000], 50, 15},
         {2, [0, 1000], 50, 20},
         {3, [0, 1000], 50, 40},
@@ -51,6 +51,11 @@ percentiles_test(_) ->
     imetrics_hist:new({percentiles, test}, [0, 100], 10),
     [
      ?_assertEqual([], element(2, imetrics:get_hist_percentiles(test, 1))),
-     ?_assertEqual([{<<"percentiles_test">>, [{<<"$dim">>, <<"pctile">>},{<<"0.1">>,55.0},{<<"0.5">>,55.0},{<<"0.9">>,55.0}]}],
-                   fun() -> imetrics_hist:add({percentiles, test}, 55), element(2, imetrics:get_hist_percentiles(test, 1)) end())
+     ?_assertEqual([{<<"percentiles_test">>, [{<<"$dim">>, <<"pctile">>},{<<"0.1">>,0.0},{<<"0.5">>,55.0},{<<"0.9">>,100.0}]}],
+                   fun() ->
+                           imetrics_hist:add({percentiles, test}, 0),
+                           imetrics_hist:add({percentiles, test}, 50),
+                           imetrics_hist:add({percentiles, test}, 50),
+                           imetrics_hist:add({percentiles, test}, 100),
+                           element(2, imetrics:get_hist_percentiles(test, 1)) end())
     ].
