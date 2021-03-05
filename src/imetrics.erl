@@ -6,13 +6,13 @@
 
 -export([set_gauge/2, set_gauge_m/3, set_multigauge/2, set_multigauge/3]).
 
--export([set_counter_dimension/2]).
+-export([set_counter_dimension/2, register_slo/2]).
 
 -export([hist/3, tick/1, tick/2, tock/1, tock/2]).
 
 -export([stats/1, set_stats/2]).
 
--export([get/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2]).
+-export([get/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2, foldl_slo/3, get_slo/2]).
 
 -export([clean_checkpoints/0]).
 
@@ -100,6 +100,9 @@ set_counter_dimension(Name, Value) ->
        end
       ).
 
+register_slo(UIdName, Opts) ->
+    imetrics_sup:register_slo(UIdName, Opts).
+
 set_multigauge(Name, Fun) when is_function(Fun) ->
     set_multigauge(Name, multigauge, Fun).
 
@@ -186,6 +189,12 @@ get_gauges() ->
 
 get_hist() ->
     imetrics_hist:get_all().
+
+foldl_slo(UIdName, F, A) ->
+    imetrics_slo:foldl_dump(UIdName, F, A).
+
+get_slo(UIdName, UId) ->
+    imetrics_slo:dump(UIdName, UId).
 
 get_hist_percentiles(Key, E) ->
     PercentileList = lists:flatten(percentile_list(E)),

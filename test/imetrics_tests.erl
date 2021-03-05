@@ -2,8 +2,11 @@
 -include_lib("eunit/include/eunit.hrl").
 
 start() ->
+    application:load(imetrics),
+    application:set_env(imetrics, http_server_port, 0),
     application:start(inets),
-    application:start(imetrics).
+    application:start(imetrics),
+    #{}.
 
 stop(_Fixture) ->
     application:stop(imetrics),
@@ -137,10 +140,11 @@ http_test_() ->
 start_http() ->
     F = start_get(),
     ok = imetrics_http_server:await(1000),
-    F.
+    {ok, Port} = imetrics_http_server:port(),
+    F#{port => Port}.
 
-http_test(_Fixture) ->
-    Url = "http://localhost:8085/imetrics/varz:get",
+http_test(#{port := Port}) ->
+    Url = "http://localhost:"++integer_to_list(Port)++"/imetrics/varz:get",
     {ok, {Status, _Headers, Body}} = 
         httpc:request(get, {Url, []}, [], []),
     {_Vsn, Code, _Friendly} = Status,

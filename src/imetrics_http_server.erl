@@ -6,7 +6,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/0, inets_pid/0, await/1]).
+-export([start_link/0, inets_pid/0, await/1, port/0]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -38,6 +38,15 @@ await(H, Steps) ->
         _ ->
             timer:sleep(H),
             await(Steps-1)
+    end.
+
+port() ->
+    case inets_pid() of
+        Pid when is_pid(Pid) ->
+            [{port, Port}] = httpd:info(Pid, [port]),
+            {ok, Port};
+        Error ->
+            Error
     end.
 
 inets_pid() ->

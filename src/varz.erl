@@ -1,6 +1,6 @@
 -module(varz).
 
--export([get/3, counters/3, gauges/3, hist/3, hist_percentiles/3]).
+-export([get/3, counters/3, gauges/3, hist/3, hist_percentiles/3, slo/3]).
 
 -compile(nowarn_deprecated_function). % get_stacktrace
 
@@ -20,7 +20,7 @@ hist_percentiles(SessionId, Headers, ReqBody) ->
     % We create a resource key that's the combination of the user agent and the entire
     % query string. Note: this breaks HTTP conventions (namely GET should be idempotent)
     QS = proplists:get_value(query_string, Headers, ""),
-    K = qs_k_val(QS),
+    K = qs_str_val(k, QS, ?MODULE_STRING),
     E = qs_e_val(QS),
     Key = resource_key(K, Headers),
     handle(SessionId, Headers, ReqBody,
@@ -31,6 +31,18 @@ hist_percentiles(SessionId, Headers, ReqBody) ->
                                   "\r\n"],
                    {RespHeaders, Data}
            end).
+
+slo(SessionId, Headers, ReqBody) ->
+    QS = proplists:get_value(query_string, Headers, ""),
+    case qs_atom_val(n, QS, ?MODULE_STRING) of
+        UIdName when UIdName =/= ?MODULE_STRING ->
+            case qs_str_val(u, QS, ?MODULE_STRING) of
+                ?MODULE_STRING ->
+                    handle(SessionId, Headers, ReqBody, fun(F, A) -> imetrics:foldl_slo(UIdName, F, A) end);
+                UId ->
+                    handle(SessionId, Headers, ReqBody, fun() -> imetrics:get_slo(UIdName, UId) end)
+            end
+    end.
 
 qs_e_val(QS) ->
     Default = 1,
@@ -44,9 +56,16 @@ qs_e_val(QS) ->
             Default
     end.
 
-qs_k_val(QS) ->
-    Default = ?MODULE_STRING,
-    case re:run(QS, "k=(?<k>[^&]*)", [{capture, [k], list}]) of
+qs_atom_val(Name, QS, Default) ->
+    case qs_str_val(Name, QS, Default) of
+        Default ->
+            Default;
+        X ->
+            list_to_atom(X)
+    end.
+
+qs_str_val(Name, QS, Default) ->
+    case re:run(QS, atom_to_list(Name)++"=(?<x>[^&]*)", [{capture, [x], list}]) of
         {match, [KStr]} ->
             KStr;
         _ ->
@@ -63,18 +82,31 @@ resource_key(K, Headers) ->
 
 handle(SessionId, _Headers, _ReqBody, DataFun) ->
     try
-        case DataFun() of
-            [] ->
+        case erlang:fun_info(DataFun, arity) of
+            {arity, 2} ->
+                %% Stream
                 RespHeaders = "Content-Type: text/plain\r\n\r\n",
                 mod_esi:deliver(SessionId, RespHeaders),
-                mod_esi:deliver(SessionId, "\n");
-            {DataHeaders, Data} ->
-                mod_esi:deliver(SessionId, DataHeaders),
-                deliver_data(SessionId, Data);
-            Data ->
-                RespHeaders = "Content-Type: text/plain\r\n\r\n",
-                mod_esi:deliver(SessionId, RespHeaders),
-                deliver_data(SessionId, Data)
+                DataFun(fun(Data, Acc0) ->
+                                deliver_data(SessionId, [Data]),
+                                Acc0+1
+                        end,
+                        0);
+            {arity, 0} ->
+                %% Dump
+                case DataFun() of
+                    [] ->
+                        RespHeaders = "Content-Type: text/plain\r\n\r\n",
+                        mod_esi:deliver(SessionId, RespHeaders),
+                        mod_esi:deliver(SessionId, "\n");
+                    {DataHeaders, Data} ->
+                        mod_esi:deliver(SessionId, DataHeaders),
+                        deliver_data(SessionId, Data);
+                    Data ->
+                        RespHeaders = "Content-Type: text/plain\r\n\r\n",
+                        mod_esi:deliver(SessionId, RespHeaders),
+                        deliver_data(SessionId, Data)
+                end
         end
     catch Class:Reason ->
         io:format("exception ~p:~p~n", [Class, Reason]),
