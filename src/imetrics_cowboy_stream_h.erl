@@ -65,7 +65,7 @@ fold(Commands, State) ->
 
 fold([], State, Acc) ->
 	{lists:reverse(Acc), State};
-fold([Response0={_, ResponseCode, _Headers=#{<<"imetrics-cowboy-stream-h">> := <<"ignore">>}, _Body}|Tail], State0, Acc) ->
+fold([Response0={_, _ResponseCode, _Headers=#{<<"imetrics-cowboy-stream-h">> := <<"ignore">>}, _Body}|Tail], State0, Acc) ->
     fold(Tail, State0, [Response0|Acc]);
 fold([Response0={response, ResponseCode, _Headers, _Body}|Tail], State0, Acc) ->
     imetrics:add_m(cowboy_responses_metric(), ResponseCode),
