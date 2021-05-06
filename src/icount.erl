@@ -174,7 +174,7 @@ handle_call(get_ets, _From, State=#{ets := Ets}) ->
 
 handle_cast({remove_counters_ref, UId}, State=#{num := N, ets := Ets}) ->
     N2 = case ets:lookup(Ets, UId) of
-        [{_, CountersRef, _}] ->
+        [{_, _CountersRef, _}] ->
             ets:delete(Ets, UId),
             N-1;
         [] ->
