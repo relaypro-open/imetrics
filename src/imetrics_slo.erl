@@ -1,7 +1,7 @@
 -module(imetrics_slo).
 
 -export([svr_ref/1, uid_name/1,
-         get/3, add/3, add/4, put/4, dump/1, dump/2, info/1, foldl_dump/3]).
+         get/3, add/3, add/4, put/4, dump/1, dump/2, info/1, foldl_dump/3, remove/2]).
 
 -define(CATCH_KNOWN_EXC(X), try
                                 X
@@ -42,6 +42,16 @@ put(UIdName, UId, Key, Val) ->
     ?CATCH_KNOWN_EXC(
        begin
            icount:put(svr_ref(UIdName), imetrics_utils:bin(UId), imetrics_utils:bin(Key), Val)
+       end
+      ).
+
+%% @doc remove/2 is provided for completeness, but will not typically be used. It's only useful
+%% if you know a particular UId is no longer relevant and want to manage its lifetime manually.
+%% Otherwise, the icount gc has you covered.
+remove(UIdName, UId) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           icount:remove(svr_ref(UIdName), imetrics_utils:bin(UId))
        end
       ).
 

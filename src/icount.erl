@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 
 -export([start_link/1, start_link/2,
-         add/3, add/4, put/4, info/1, get/3, dump/1, dump/2, foldl_dump/3]).
+         add/3, add/4, put/4, info/1, get/3, dump/1, dump/2, foldl_dump/3, remove/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -compile({no_auto_import, [get_keys/1]}).
 
@@ -93,6 +93,13 @@ put(SvrRef, UId, Key, Value) ->
             Error
     end.
 
+%% @doc remove 'counters' object entirely. All contained counter
+%% values are destroyed. The memory used by this 'counters' object
+%% is freed within the Erlang BEAM, and this UId will not appear in
+%% future calls to dump and foldl_dump
+remove(SvrRef, UId) ->
+    gen_server:cast(SvrRef, {remove_counters_ref, UId}).
+
 %% ---------------------------------------------------------------
 
 get(SvrRef, _UId, CountersRef, Key) ->
@@ -165,6 +172,15 @@ handle_call(get_keys, _From, State=#{idx := Idx}) ->
 handle_call(get_ets, _From, State=#{ets := Ets}) ->
     {reply, Ets, State}.
 
+handle_cast({remove_counters_ref, UId}, State=#{num := N, ets := Ets}) ->
+    N2 = case ets:lookup(Ets, UId) of
+        [{_, CountersRef, _}] ->
+            ets:delete(Ets, UId),
+            N-1;
+        [] ->
+            N
+    end,
+    {noreply, State#{num => N2}};
 handle_cast(gc, State=#{mem := Mem,
                         num := Num,
                         hwm := Hwm,
