@@ -2,3 +2,4 @@
 .rebar
 ebin
 *.swp
+_build

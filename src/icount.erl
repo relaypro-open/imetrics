@@ -2,11 +2,17 @@
 -behaviour(gen_server).
 
 -export([start_link/1, start_link/2,
-         add/3, add/4, put/4, info/1, get/3, dump/1, dump/2, foldl_dump/3, remove/2]).
+         add/3, add/4, put/4, info/1, get/3,
+         localize/2, localize/3, delocalize/2,
+         dump/1, dump/2, foldl_dump/3, remove/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 -compile({no_auto_import, [get_keys/1]}).
 
 -define(CallTimeout, 20000).
+
+-ifdef(EUNIT).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 %% @doc start a new unnamed gen_server
 start_link(Opts=#{}) ->
@@ -24,6 +30,51 @@ info(SvrRef) ->
     #{uids => ets:info(Ets, size),
       memory => Memory,
       keys => length(get_keys(SvrRef))}.
+
+%% @doc Localizes a counters object. See localize/3
+localize(SvrRef, UId) ->
+    localize(SvrRef, UId, 7*timer:hours(24)).
+
+%% @doc Localizes a counters object by doing the following:
+%%   1. Artifically updates the last-used timestamp to the future
+%%      to help prevent garbage collection. Note: this does not guarantee
+%%      that the object will not be garbage collected.
+%%   2. Puts the counters object in calling process's local storage.
+%%      This allows us to optimize future calls
+%%   3. The icount gen_server monitors the calling process so that
+%%      when it goes DOWN, icount will automatically call remove/2
+%%
+%%  localize/3 can be called multiple times to increase the protection
+%%  timestamp over time.
+%%
+%%  Intended use for this feature is to tie the lifetime of a 'counters' object
+%%  to a running process (with a unique process identifier for the UId). For
+%%  example, in your init/1, you can call localize/2 or localize/3, and 
+%%  proceed to increment counters. The icount gen_server will only be accessed
+%%  to compute 'new' key indexes on the fly. Everything else is cached in your
+%%  process's local storage. When your process ends, the counters object is
+%%  cleanup up from icount.
+%%
+%%  In the meantime, all the counters can still be tracked via the icount
+%%  interface from anywhere (e.g. global metrics gathering)
+localize(SvrRef, UId, ProtectTime) ->
+    LocalizedUIdKey = {?MODULE, counters, UId},
+    LocalizedIdxKey = {?MODULE, idx, UId},
+    put(LocalizedUIdKey, get_or_create_counters_ref(SvrRef, UId, {protect, ProtectTime})),
+    put(LocalizedIdxKey, get_idx(SvrRef)),
+    Pid = self(),
+    gen_server:cast(SvrRef, {monitor, UId, Pid}),
+    ok.
+
+%% @doc Performs the opposite of localize/3
+delocalize(SvrRef, UId) ->
+    get_or_create_counters_ref(SvrRef, UId, {protect, 0}),
+    LocalizedUIdKey = {?MODULE, counters, UId},
+    LocalizedIdxKey = {?MODULE, idx, UId},
+    erase(LocalizedUIdKey),
+    erase(LocalizedIdxKey),
+    gen_server:cast(SvrRef, {monitor, UId, undefined}),
+    ok.
 
 %% @doc dump all counters to a nested proplist, sorted by recency
 dump(SvrRef) ->
@@ -76,7 +127,7 @@ add(SvrRef, UId, Key) ->
 %% @doc increment counter value by Value
 add(SvrRef, UId, Key, Value) ->
     CountersRef = get_or_create_counters_ref(SvrRef, UId, write),
-    case key_to_idx(SvrRef, Key) of
+    case key_to_idx(SvrRef, UId, Key) of
         {ok, Idx} ->
             counters:add(CountersRef, Idx, Value);
         Error ->
@@ -86,7 +137,7 @@ add(SvrRef, UId, Key, Value) ->
 %% @doc put Value to counter value (slower than add)
 put(SvrRef, UId, Key, Value) ->
     CountersRef = get_or_create_counters_ref(SvrRef, UId, write),
-    case key_to_idx(SvrRef, Key) of
+    case key_to_idx(SvrRef, UId, Key) of
         {ok, Idx} ->
             counters:put(CountersRef, Idx, Value);
         Error ->
@@ -102,8 +153,8 @@ remove(SvrRef, UId) ->
 
 %% ---------------------------------------------------------------
 
-get(SvrRef, _UId, CountersRef, Key) ->
-    case key_to_idx(SvrRef, Key) of
+get(SvrRef, UId, CountersRef, Key) ->
+    case key_to_idx(SvrRef, UId, Key) of
         {ok, Idx} ->
             counters:get(CountersRef, Idx);
         {error, idx_overflow} ->
@@ -112,10 +163,41 @@ get(SvrRef, _UId, CountersRef, Key) ->
 
 %% @doc UId can be any term
 get_or_create_counters_ref(SvrRef, UId, Op) ->
-    gen_server:call(SvrRef, {counters_ref, UId, Op}, ?CallTimeout).
+    if Op =:= write orelse Op =:= read ->
+           LocalizedUIdKey = {?MODULE, counters, UId},
+           case get(LocalizedUIdKey) of
+               undefined ->
+                   gen_server:call(SvrRef, {counters_ref, UId, Op}, ?CallTimeout);
+               CountersRef ->
+                   CountersRef
+           end;
+       true ->
+           gen_server:call(SvrRef, {counters_ref, UId, Op}, ?CallTimeout)
+    end.
 
-key_to_idx(SvrRef, Key) ->
-    gen_server:call(SvrRef, {key_to_idx, Key}, ?CallTimeout).
+get_idx(SvrRef) ->
+    gen_server:call(SvrRef, get_idx, ?CallTimeout).
+
+key_to_idx(SvrRef, UId, Key) ->
+    LocalizedIdxKey = {?MODULE, idx, UId},
+    case get(LocalizedIdxKey) of
+        undefined ->
+            gen_server:call(SvrRef, {key_to_idx, Key}, ?CallTimeout);
+        Idx ->
+            case maps:get(Key, Idx, undefined) of
+                undefined ->
+                    case gen_server:call(SvrRef, {key_to_idx, Key}, ?CallTimeout) of
+                        {ok, V} ->
+                            Idx2 = Idx#{Key => V},
+                            put(LocalizedIdxKey, Idx2),
+                            {ok, V};
+                        Error ->
+                            Error
+                    end;
+                V ->
+                    {ok, V}
+            end
+    end.
 
 get_keys(SvrRef) ->
     try gen_server:call(SvrRef, get_keys, ?CallTimeout)
@@ -135,20 +217,32 @@ init(StartArgs=#{size := Size,
     {ok, StartArgs#{idx => #{},
            mem => Mem,
            num => 0,
-           ets => Ets}}.
+           ets => Ets,
+           localized => {#{}, #{}} % id => mref and mref => id
+                   }
+    }.
 
 handle_call({counters_ref, UId, Op}, _From, State=#{size := Size, opts := Opts, num := N, ets := Ets}) ->
     Now = erlang:monotonic_time(microsecond),
     {Reply, NumCounters} = case ets:lookup(Ets, UId) of
         [{_, CountersRef, _}] ->
-            true = ets:insert(Ets, {UId, CountersRef, Now}),
+            InsertTime = case Op of
+                {protect, ProtectTime} ->
+                    Now+ProtectTime;
+                _ ->
+                    Now
+            end,
+            true = ets:insert(Ets, {UId, CountersRef, InsertTime}),
             {CountersRef, N};
         [] ->
             gen_server:cast(self(), gc),
             CountersRef = counters:new(Size, Opts),
-            if Op =:= write ->
+            case Op of
+                write ->
                    true = ets:insert(Ets, {UId, CountersRef, Now});
-               true ->
+                {protect, ProtectTime} ->
+                   true = ets:insert(Ets, {UId, CountersRef, Now+ProtectTime});
+                _ ->
                    ok
             end,
             {CountersRef, N+1}
@@ -170,8 +264,30 @@ handle_call({key_to_idx, Key}, _From, State=#{idx := Idx, size := Size}) ->
 handle_call(get_keys, _From, State=#{idx := Idx}) ->
     {reply, maps:keys(Idx), State};
 handle_call(get_ets, _From, State=#{ets := Ets}) ->
-    {reply, Ets, State}.
+    {reply, Ets, State};
+handle_call(get_idx, _From, State=#{idx := Idx}) ->
+    {reply, Idx, State}.
 
+handle_cast({monitor, UId, undefined}, State=#{localized := {IMap, RMap}}) ->
+    case maps:get(UId, IMap, undefined) of
+        undefined ->
+            {noreply, State};
+        MRef ->
+            IMap2 = maps:without([UId], IMap),
+            RMap2 = maps:without([MRef], RMap),
+            {noreply, State#{localized => {IMap2, RMap2}}}
+    end;
+handle_cast({monitor, UId, Pid}, State=#{localized := {IMap, RMap}}) ->
+    case maps:get(UId, IMap, undefined) of
+        undefined ->
+            MRef = erlang:monitor(process, Pid),
+            IMap2 = IMap#{UId => MRef},
+            RMap2 = RMap#{MRef => UId},
+            {noreply, State#{localized => {IMap2, RMap2}}};
+        _ ->
+            % already monitored
+            {noreply, State}
+    end;
 handle_cast({remove_counters_ref, UId}, State=#{num := N, ets := Ets}) ->
     N2 = case ets:lookup(Ets, UId) of
         [{_, _CountersRef, _}] ->
@@ -202,6 +318,19 @@ handle_cast(gc, State=#{mem := Mem,
            {noreply, State}
     end.
 
+handle_info({sleep, N}, State) ->
+    do_sleep(N),
+    {noreply, State};
+handle_info({'DOWN', MRef, process, _DownPid, _Info}, State=#{localized := {IMap, RMap}}) ->
+    case maps:get(MRef, RMap, undefined) of
+        undefined ->
+            {noreply, State};
+        UId ->
+            IMap2 = maps:without([UId], IMap),
+            RMap2 = maps:without([MRef], RMap),
+            remove(self(), UId), % gen_server:cast
+            {noreply, State#{localized => {IMap2, RMap2}}}
+    end;
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -210,3 +339,16 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extras) ->
     {ok, State}.
+
+%% In order to test the localization of a counters object,
+%% this sleep function is provided. It will keep the gen_server
+%% in a busy state for N milliseconds, during which an eunit test
+%% can operate on the localized counters object. If we're not in an
+%% eunit test, this function is a no-op
+-ifdef(EUNIT).
+do_sleep(N) ->
+    ?debugFmt("sleeping ~p within an eunit test", [N]),
+    timer:sleep(N).
+-else.
+do_sleep(_) -> ok.
+-endif.
