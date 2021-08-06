@@ -186,7 +186,7 @@ tock_s(Ticks, RefOrName) ->
             case tock_s_name_match(Ticks, RefOrName) of
                 none ->
                     {{error, badarg}, Ticks};
-                {Ref, {_Name, Tick}} ->
+                {Ref, {_Name, Tick}, _} ->
                     {tock(Tick), maps:remove(Ref, Ticks)}
             end;
         {_Name, Tick} ->
