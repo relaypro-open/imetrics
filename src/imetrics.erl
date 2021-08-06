@@ -8,7 +8,7 @@
 
 -export([set_counter_dimension/2, register_slo/2]).
 
--export([hist/3, tick/1, tick/2, tock/1, tock/2]).
+-export([hist/3, tick/1, tick/2, tock/1, tock/2, tick_s/3, tock_s/2]).
 
 -export([stats/1, set_stats/2]).
 
@@ -169,6 +169,30 @@ tock({Name, Unit, Ts}, Fun) when is_function(Fun) ->
 tock(_, _) ->
     {error, badarg}.
 
+%% @doc Tracks tick/tock entries with an opaque map.
+%%
+%% The caller can choose to either use the returned ref for identification,
+%% or the Name parameter. Using the Name parameter can cause collisions if
+%% tracking multiple metrics of the same name using the same map state.
+%%
+tick_s(Ticks, Name, Unit) ->
+    Ref = make_ref(),
+    {Ref, Ticks#{Ref => {Name, tick(Name, Unit)}}}.
+
+%% @doc Stores the tock value for the given ref or Name (See tick_s)
+tock_s(Ticks, RefOrName) ->
+    case maps:get(RefOrName, Ticks, undefined) of
+        undefined ->
+            case tock_s_name_match(Ticks, RefOrName) of
+                none ->
+                    {{error, badarg}, Ticks};
+                {Ref, {_Name, Tick}} ->
+                    {tock(Tick), maps:remove(Ref, Ticks)}
+            end;
+        {_Name, Tick} ->
+            {tock(Tick), maps:remove(RefOrName, Ticks)}
+    end.
+
 get() ->
     Counters = get_unmapped(imetrics_counters),
     Gauges = get_unmapped(imetrics_gauges),
@@ -316,4 +340,13 @@ get_mapped(T) ->
                    end, orddict:new(),
                    T),
     orddict:to_list(MappedDict).
+
+tock_s_name_match(Ticks, Name) ->
+    I = maps:iterator(Ticks),
+    fun MapMatchFun(none) -> none;
+        MapMatchFun(Return={_, {N0, _}, _I2}) when N0 =:= Name ->
+            Return;
+        MapMatchFun({__K, __V, I2}) ->
+            MapMatchFun(maps:next(I2))
+    end(maps:next(I)).
 

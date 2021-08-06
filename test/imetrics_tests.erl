@@ -40,7 +40,6 @@ add_test(_Fixture) ->
         ?_assertEqual(1, imetrics:add(200)),
         ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i})),
         ?_assertEqual({error,{badmatch,check_inputs}}, imetrics:add(bad, map))
-
     ].
 
 gauge_test_() ->
@@ -181,4 +180,28 @@ ticktock_test(_Fixture) ->
                     timer:sleep(285),
                     imetrics:tock(Tick)
             end)())
+    ].
+
+ticktock_s_test() ->
+    {setup,
+        fun start_ticktock/0,
+        fun stop/1,
+        fun ticktock_s_test/1}. 
+
+ticktock_s_test(_Fixture) ->
+    [
+     ?_assertMatch({15, 1}, (fun() ->
+                                     {Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
+                                     timer:sleep(285),
+                                     {Result, Ticks2} = imetrics:tock_s(Ticks, Ref),
+                                     0 = map_size(Ticks2),
+                                     Result
+                             end)()),
+     ?_assertMatch({15, 1}, (fun() ->
+                                     {_Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
+                                     timer:sleep(285),
+                                     {Result, Ticks2} = imetrics:tock_s(Ticks, test),
+                                     0 = map_size(Ticks2),
+                                     Result
+                             end)())
     ].
