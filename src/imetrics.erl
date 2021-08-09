@@ -177,7 +177,7 @@ tock(_, _) ->
 %%
 tick_s(Ticks, Name, Unit) ->
     Ref = make_ref(),
-    {Ref, Ticks#{Ref => {Name, tick(Name, Unit)}}}.
+    {Ref, Ticks#{Ref => tick(Name, Unit)}}.
 
 %% @doc Stores the tock value for the given ref or Name (See tick_s)
 tock_s(Ticks, RefOrName) ->
@@ -186,10 +186,10 @@ tock_s(Ticks, RefOrName) ->
             case tock_s_name_match(Ticks, RefOrName) of
                 none ->
                     {{error, badarg}, Ticks};
-                {Ref, {_Name, Tick}, _} ->
+                {Ref, Tick, _} ->
                     {tock(Tick), maps:remove(Ref, Ticks)}
             end;
-        {_Name, Tick} ->
+        Tick ->
             {tock(Tick), maps:remove(RefOrName, Ticks)}
     end.
 
@@ -344,7 +344,7 @@ get_mapped(T) ->
 tock_s_name_match(Ticks, Name) ->
     I = maps:iterator(Ticks),
     fun MapMatchFun(none) -> none;
-        MapMatchFun(Return={_, {N0, _}, _I2}) when N0 =:= Name ->
+        MapMatchFun(Return={_, Tick, _I2}) when element(1, Tick) =:= Name -> %% See tick/2
             Return;
         MapMatchFun({__K, __V, I2}) ->
             MapMatchFun(maps:next(I2))

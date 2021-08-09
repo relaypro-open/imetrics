@@ -182,7 +182,7 @@ ticktock_test(_Fixture) ->
             end)())
     ].
 
-ticktock_s_test() ->
+ticktock_s_test_() ->
     {setup,
         fun start_ticktock/0,
         fun stop/1,
@@ -197,7 +197,7 @@ ticktock_s_test(_Fixture) ->
                                      0 = map_size(Ticks2),
                                      Result
                              end)()),
-     ?_assertMatch({15, 1}, (fun() ->
+     ?_assertMatch({15, 2}, (fun() ->
                                      {_Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
                                      timer:sleep(285),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, test),
