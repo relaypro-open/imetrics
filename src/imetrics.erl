@@ -8,7 +8,7 @@
 
 -export([set_counter_dimension/2, register_slo/2]).
 
--export([hist/3, tick/1, tick/2, tock/1, tock/2, tick_s/3, tock_s/2]).
+-export([hist/3, tick/1, tick/2, tock/1, tock/2, tick_s/3, tock_s/2, stop_tick_s/2]).
 
 -export([stats/1, set_stats/2]).
 
@@ -191,6 +191,19 @@ tock_s(Ticks, RefOrName) ->
             end;
         Tick ->
             {tock(Tick), maps:remove(RefOrName, Ticks)}
+    end.
+
+stop_tick_s(Ticks, RefOrName) ->
+    case maps:get(RefOrName, Ticks, undefined) of
+        undefined ->
+            case tock_s_name_match(Ticks, RefOrName) of
+                none ->
+                    Ticks;
+                {Ref, _Tick, _} ->
+                    maps:remove(Ref, Ticks)
+            end;
+        _Tick ->
+            maps:remove(RefOrName, Ticks)
     end.
 
 get() ->
