@@ -8,7 +8,7 @@
 
 -export([set_counter_dimension/2, register_slo/2]).
 
--export([hist/3, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tock_s/2, stop_tick_s/2]).
+-export([hist/3, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tock_s/2, tock_as_s/3, stop_tick_s/2]).
 
 -export([stats/1, set_stats/2]).
 
