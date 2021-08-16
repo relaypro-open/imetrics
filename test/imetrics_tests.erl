@@ -171,6 +171,7 @@ ticktock_test_() ->
 start_ticktock() ->
     F = start(),
     imetrics:hist(test, [0, 1000], 50),
+    imetrics:hist(test2, [0, 1000], 50),
     F.
 
 ticktock_test(_Fixture) ->
@@ -179,6 +180,11 @@ ticktock_test(_Fixture) ->
                     Tick = imetrics:tick(test, millisecond),
                     timer:sleep(285),
                     imetrics:tock(Tick)
+            end)()),
+        ?_assertEqual({15, 1}, (fun() ->
+                    Tick = imetrics:tick(test, millisecond),
+                    timer:sleep(285),
+                    imetrics:tock_as(Tick, test2)
             end)())
     ].
 

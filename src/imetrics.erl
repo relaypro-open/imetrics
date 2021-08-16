@@ -8,7 +8,7 @@
 
 -export([set_counter_dimension/2, register_slo/2]).
 
--export([hist/3, tick/1, tick/2, tock/1, tock/2, tick_s/3, tock_s/2, stop_tick_s/2]).
+-export([hist/3, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tock_s/2, stop_tick_s/2]).
 
 -export([stats/1, set_stats/2]).
 
@@ -158,15 +158,24 @@ tick(Name, Unit) ->
     {Name, Unit, erlang:monotonic_time(Unit)}.
 
 tock(Tick) ->
-    tock(Tick,
-        fun(Name, Diff) ->
-                imetrics_hist:add(Name, Diff)
-        end).
+    tock_as(Tick, '_').
 
-tock({Name, Unit, Ts}, Fun) when is_function(Fun) ->
+tock(Tick, Fun) ->
+    tock_as(Tick, '_', Fun).
+
+tock_as(Tick, NewName) ->
+    tock_as(Tick, NewName,
+            fun(Name, Diff) ->
+                    imetrics_hist:add(Name, Diff)
+            end).
+
+tock_as({Name, Unit, Ts}, '_', Fun) when is_function(Fun) ->
     Ts2 = erlang:monotonic_time(Unit),
     Fun(Name, Ts2-Ts);
-tock(_, _) ->
+tock_as({_OldName, Unit, Ts}, NewName, Fun) when is_function(Fun) ->
+    Ts2 = erlang:monotonic_time(Unit),
+    Fun(NewName, Ts2-Ts);
+tock_as(_, _, _) ->
     {error, badarg}.
 
 %% @doc Tracks tick/tock entries with an opaque map.
@@ -181,16 +190,19 @@ tick_s(Ticks, Name, Unit) ->
 
 %% @doc Stores the tock value for the given ref or Name (See tick_s)
 tock_s(Ticks, RefOrName) ->
+    tock_as_s(Ticks, RefOrName, '_').
+
+tock_as_s(Ticks, RefOrName, NewName) ->
     case maps:get(RefOrName, Ticks, undefined) of
         undefined ->
             case tock_s_name_match(Ticks, RefOrName) of
                 none ->
                     {{error, badarg}, Ticks};
                 {Ref, Tick, _} ->
-                    {tock(Tick), maps:remove(Ref, Ticks)}
+                    {tock_as(Tick, NewName), maps:remove(Ref, Ticks)}
             end;
         Tick ->
-            {tock(Tick), maps:remove(RefOrName, Ticks)}
+            {tock_as(Tick, NewName), maps:remove(RefOrName, Ticks)}
     end.
 
 stop_tick_s(Ticks, RefOrName) ->
