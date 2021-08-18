@@ -8,7 +8,7 @@
 
 -export([set_counter_dimension/2, register_slo/2]).
 
--export([hist/3, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tock_s/2, tock_as_s/3, stop_tick_s/2]).
+-export([hist/3, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tick_s/4, tock_s/2, tock_as_s/3, stop_tick_s/2]).
 
 -export([stats/1, set_stats/2]).
 
@@ -186,6 +186,9 @@ tock_as(_, _, _) ->
 %%
 tick_s(Ticks, Name, Unit) ->
     Ref = make_ref(),
+    tick_s(Ticks, Ref, Name, Unit).
+
+tick_s(Ticks, Ref, Name, Unit) ->
     {Ref, Ticks#{Ref => tick(Name, Unit)}}.
 
 %% @doc Stores the tock value for the given ref or Name (See tick_s)
