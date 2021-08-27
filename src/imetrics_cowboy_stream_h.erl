@@ -20,6 +20,9 @@ cowboy_responses_metric() ->
 cowboy_error_responses_metric() ->
     application:get_env(imetrics, cowboy_error_responses_metric, cowboy_error_responses).
 
+cowboy_active_handlers_metric() ->
+    application:get_env(imetrics, cowboy_active_handlers_metric, cowboy_active_handlers).
+
 -spec app_init()
     -> ok.
 app_init() ->
@@ -32,6 +35,7 @@ app_init() ->
 -spec init(cowboy_stream:streamid(), cowboy_req:req(), cowboy:opts())
 	-> {cowboy_stream:commands(), #state{}}.
 init(StreamID, Req, Opts) ->
+    imetrics:update_gauge(cowboy_active_handlers_metric(), 1),
 	State0 = #state{},
 	{Commands0, Next} = cowboy_stream:init(StreamID, Req, Opts),
 	fold(Commands0, State0#state{next=Next}).
@@ -50,6 +54,7 @@ info(StreamID, Info, State0=#state{next=Next0}) ->
 
 -spec terminate(cowboy_stream:streamid(), cowboy_stream:reason(), #state{}) -> any().
 terminate(StreamID, Reason, #state{next=Next}) ->
+    imetrics:update_gauge(cowboy_active_handlers_metric(), -1),
 	cowboy_stream:terminate(StreamID, Reason, Next).
 
 -spec early_error(cowboy_stream:streamid(), cowboy_stream:reason(),

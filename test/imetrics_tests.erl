@@ -54,7 +54,11 @@ gauge_test(_Fixture) ->
     [
         ?_assertEqual(F, imetrics:set_gauge(atom, F)),
         ?_assertEqual(F, imetrics:set_gauge_m(atom_m, atom_k, F)),
-        ?_assertEqual(F, imetrics:set_gauge(many_set, F))
+        ?_assertEqual(F, imetrics:set_gauge(many_set, F)),
+        ?_assertEqual(1, imetrics:update_gauge(updated, 1)),
+        ?_assertEqual(0, imetrics:update_gauge(updated, -1)),
+        ?_assertEqual(1, imetrics:update_gauge_m(updated, a, 1)),
+        ?_assertEqual(-1, imetrics:update_gauge_m(updated, a, -2))
     ].
 
 multigauge_test_() ->

@@ -4,7 +4,7 @@
 
 -export([add/1, add/2, add_m/2, add_m/3]).
 
--export([set_gauge/2, set_gauge_m/3, set_multigauge/2, set_multigauge/3]).
+-export([set_gauge/2, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge_m/3]).
 
 -export([set_counter_dimension/2, register_slo/2]).
 
@@ -85,6 +85,24 @@ set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
             Value
         end
     ).
+
+update_gauge(Name, Value) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           NameBin = imetrics_utils:bin(Name),
+           ets:update_counter(imetrics_gauges, NameBin, Value, {NameBin, 0})
+       end
+      ).
+
+update_gauge_m(Name, Key, Value) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           NameBin = imetrics_utils:bin(Name),
+           KeyBin = imetrics_utils:bin(Key),
+           Id = mapped_id(NameBin, KeyBin),
+           ets:update_counter(imetrics_mapped_gauges, Id, Value, {Id, 0})
+       end
+      ).
 
 set_counter_dimension(Name, Value) ->
     ?CATCH_KNOWN_EXC(
