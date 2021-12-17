@@ -142,10 +142,16 @@ cpu_load_avg 1min:0.1 5min:3.4
 
 Configuration
 -------------
-| env var            | default                       | desc                                                                            |
-|--------------------|-------------------------------|---------------------------------------------------------------------------------|
+| env var              | default                         | desc                                                                            |
+| -------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
 | `http_server_port`   | `8085`                          | Listening port                                                                  |
 | `http_home`          | `/tmp/imetrics`                 | inets http requires a directory for which the http server can have full control |
 | `http_server_root`   | `Http_home ++ "/server_root"`   | inets http requirement                                                          |
 | `http_document_root` | `Http_home ++ "/document_root"` | inets http requirement                                                          |
-| `separator`	        | `<<"_">>`                     | binary string used to separate tuple elements for Name, Key                     |
+| `separator`          | `<<"_">>`                       | binary string used to separate tuple elements for Name, Key                     |
+
+## OpenMetrics conversion
+
+imetrics' current HTTP format is a simple plaintext representation of the metrics.
+Work is ongoing to convert this representation to the [OpenMetrics](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md#protobuf-format)
+standard on the [`feature/openmetrics` branch](https://github.com/relaypro-open/imetrics/tree/feature/openmetrics).
