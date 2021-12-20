@@ -107,7 +107,8 @@ handle(SessionId, _Headers, _ReqBody, DataFun) ->
                         mod_esi:deliver(SessionId, RespHeaders),
                         deliver_data(SessionId, Data)
                 end
-        end
+        end,
+        mod_esi:deliver(SessionId, "# EOF\n")
     catch Class:Reason ->
         io:format("exception ~p:~p~n", [Class, Reason]),
         io:format("~p~n", [erlang:get_stacktrace()]),

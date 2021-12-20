@@ -105,7 +105,7 @@ start_server() ->
                 {document_root, DocumentRoot},
                 {bind_address, "localhost"},
                 {error_log_format, pretty},
-                {erl_script_alias, {"/imetrics", [varz]}}]).
+                {erl_script_alias, {"/imetrics", [varz, openmetrics]}}]).
 
 handle_info({'EXIT', _From, Reason}, State) ->
     {stop, Reason, State}.
