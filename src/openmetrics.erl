@@ -96,14 +96,14 @@ handle(SessionId, _Headers, _ReqBody, DataFun) ->
                 %% Dump
                 case DataFun() of
                     [] ->
-                        RespHeaders = "Content-Type: text/plain\r\n\r\n",
+                        RespHeaders = "Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n\r\n",
                         mod_esi:deliver(SessionId, RespHeaders),
                         mod_esi:deliver(SessionId, "\n");
                     {DataHeaders, Data} ->
                         mod_esi:deliver(SessionId, DataHeaders),
                         deliver_data(SessionId, Data);
                     Data ->
-                        RespHeaders = "Content-Type: text/plain\r\n\r\n",
+                        RespHeaders = "Content-Type: application/openmetrics-text; version=1.0.0; charset=utf-8\r\n\r\n",
                         mod_esi:deliver(SessionId, RespHeaders),
                         deliver_data(SessionId, Data)
                 end
