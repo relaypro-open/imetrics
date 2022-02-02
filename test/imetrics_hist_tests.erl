@@ -2,12 +2,10 @@
 -include_lib("eunit/include/eunit.hrl").
 
 start() ->
-    application:start(inets),
-    application:start(imetrics).
+    application:ensure_all_started(imetrics).
 
 stop(_Fixture) ->
-    application:stop(imetrics),
-    application:stop(inets).
+    application:stop(imetrics).
 
 compute_bucket_test_() ->
     Tests = [
