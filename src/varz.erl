@@ -134,9 +134,9 @@ handle(Req, DataFun) ->
                 end
         end
     catch
-        Class:Reason ->
+        Class:Reason:Stacktrace ->
             io:format("exception ~p:~p~n", [Class, Reason]),
-            % io:format("~p~n", [erlang:get_stacktrace()]),
+            io:format("~p~n", [Stacktrace]),
             ok
     end.
 
