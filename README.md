@@ -8,9 +8,8 @@ Dependencies
 ------------
 
 - *No R16 support*: We require the "newer" ets functions such as ets:update_counter/4.
-- *inets*: The `inets` application must be started before you start `imetrics`
-
-That's it! imetrics doesn't pull in any external deps.
+- *cowboy*: The `cowboy` application (and its dependencies) must be started before you start `imetrics`
+    - `cowboy` depends on `ranch`, `cowlib`, `ssl`, and `crypto` [(see here)](https://ninenines.eu/docs/en/cowboy/2.8/manual/)
 
 Getting started
 ---------------
@@ -22,11 +21,10 @@ rebar eunit
 erl -pa ebin
 ```
 
-Start the imetrics app:
+Start the imetrics app and its dependencies:
 
-```
-application:start(inets),
-application:start(imetrics).
+```erlang
+application:ensure_all_started(imetrics).
 ```
 
 Next, decide if you want a counter or a gauge. 
@@ -38,7 +36,7 @@ increasing while imetrics is running. Why is this nice? Well, if your code is
 event-driven, like many Erlang apps, it's very easy to instrument counting such
 events. For instance, each time a client connects, we can increment a counter.
 
-```
+```erlang
 imetrics:add(client_connections).
 ```
 
@@ -50,7 +48,7 @@ imetrics also supports *mapped counters*, which allow you to bundle many
 related counters under one named entry. When used in an http server, we can
 count the number of each HTTP response code.
 
-```
+```erlang
 imetrics:add_m(http_responses, "200"),
 imetrics:add_m(http_responses, "404").
 ```
@@ -59,13 +57,13 @@ imetrics:add_m(http_responses, "404").
 
 A gauge is a number, any number. You are in charge of what value it's set to.
 
-```
+```erlang
 imetrics:set_gauge(velocity, 50.5).
 ```
 
 And there are also *mapped gauges*.
 
-```
+```erlang
 imetrics:set_gauge_m(cpu_load_avg, '1min', 0.1),
 imetrics:set_gauge_m(cpu_load_avg, '5min', 3.4).
 ```
@@ -81,7 +79,7 @@ storing the actual values themselves. It tracks number of values, min
 value, max value, sum, and squared sum. Designed more for a single bulk
 update instead of rapid updates in succession.
 
-```
+```erlang
 % retrieve/create named stats
 Stats = imetrics:stats(ievent_expiration_jobs),
 % for each expiration job, update stats in memory
@@ -96,7 +94,7 @@ imetrics will normalize any Name and Key input to the add and set_gauge
 functions to a binary string. The Name and Key needs to match one of these
 guards (See `imetrics:bin/1`):
 
-```
+```erlang
 is_atom(V)
 is_list(V)
 is_binary(V)
@@ -116,7 +114,7 @@ stored by imetrics. Un-mapped metrics have the number value in pos 2 of each
 entry. Mapped metrics have a nested proplist containing the metrics for each
 associated key.
 
-```
+```erlang
 > imetrics:get().
 [{<<"client_connections">>,1},
  {<<"velocity">>,50.5},
@@ -129,8 +127,8 @@ All the metric names and mapping keys are normalized as binaries.
 ### With HTTP ###
 imetrics starts a very simple HTTP server that returns an easily parseable
 plaintext representation of all the metrics. The URI for accessing this data
-is `/imetrics/varz:get`. The somewhat strange URI format is necessary to make
-proper use of the built-in HTTP server in Erlang. (See `mod_esi`)
+is `/imetrics/varz:get`. ~~The somewhat strange URI format is necessary to make
+proper use of the built-in HTTP server in Erlang. (See `mod_esi`)~~ (Though `mod_esi` is no longer used, this URI format is now maintained for backwards compatibility.)
 
 ```
 $ curl localhost:8085/imetrics/varz:get
@@ -145,7 +143,4 @@ Configuration
 | env var            | default                       | desc                                                                            |
 |--------------------|-------------------------------|---------------------------------------------------------------------------------|
 | `http_server_port`   | `8085`                          | Listening port                                                                  |
-| `http_home`          | `/tmp/imetrics`                 | inets http requires a directory for which the http server can have full control |
-| `http_server_root`   | `Http_home ++ "/server_root"`   | inets http requirement                                                          |
-| `http_document_root` | `Http_home ++ "/document_root"` | inets http requirement                                                          |
 | `separator`	        | `<<"_">>`                     | binary string used to separate tuple elements for Name, Key                     |

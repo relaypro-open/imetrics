@@ -1,12 +1,12 @@
 {application, imetrics,
  [
-  {description, ""},
+  {description, "A lightweight library to allow you to easily instrument your Erlang libraries."},
   {vsn, "1"},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib,
-                  inets
+                  cowboy
                  ]},
   {mod, { imetrics_app, []}},
   {env, []}
