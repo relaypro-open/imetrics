@@ -38,11 +38,12 @@ handle(Req, DataFun) ->
                         Req1 = cowboy_req:set_resp_header(
                             <<"content-type">>, "application/openmetrics-text", Req
                         ),
-                        {ok, cowboy_req:reply(200, Req1)};
+                        {ok, cowboy_req:reply(200, #{}, "# EOF\n", Req1)};
                     {DataHeaders, Data} ->
                         Req1 = cowboy_req:set_resp_headers(DataHeaders, Req),
                         Req2 = cowboy_req:stream_reply(200, Req1),
                         deliver_data(Req2, Data),
+                        cowboy_req:stream_body("# EOF\n", nofin, Req2),
                         cowboy_req:stream_trailers(#{}, Req2),
                         {ok, Req2};
                     Data ->
@@ -51,6 +52,7 @@ handle(Req, DataFun) ->
                         ),
                         Req2 = cowboy_req:stream_reply(200, Req1),
                         deliver_data(Req2, Data),
+                        cowboy_req:stream_body("# EOF\n", nofin, Req2),
                         cowboy_req:stream_trailers(#{}, Req2),
                         {ok, Req2}
                 end

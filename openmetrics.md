@@ -6,7 +6,7 @@
 
 - [x] Copy `varz` module to a new module called `openmetrics` to use as a starting point
 - [ ] Modify `openmetrics` module to surface data compliant with the standard:
-  - [ ] Include `# EOF` as required by the standard
+  - [x] Include `# EOF` as required by the standard
   - [x] Update `Content-Type` header
   - [ ] Include `TYPE` metric descriptor
   - [ ] Update handling of mapped data to convert mapped counters and stats maps to tagged metric sets
