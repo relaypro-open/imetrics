@@ -11,7 +11,7 @@ terminate(_Reason, _Req, _State) ->
     ok.
 
 get(Req) ->
-    handle(Req, fun imetrics:get/0).
+    handle(Req, fun imetrics:get_with_types/0).
 
 handle(Req, DataFun) ->
     try
@@ -66,19 +66,27 @@ handle(Req, DataFun) ->
 
 deliver_data(Req, Data) ->
     lists:foreach(
-        fun
-            ({Name, Value}) when is_number(Value) ->
-                VStr = strnum(Value),
-                cowboy_req:stream_body([<<Name/binary, " ">>, VStr, "\n"], nofin, Req);
-            ({Name, Map}) when is_map(Map) ->
-                MIo = serialize_proplist(maps:to_list(Map)),
-                cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req);
-            ({Name, MappedValues}) when is_list(MappedValues) ->
-                MIo = serialize_proplist(MappedValues),
-                cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req)
-        end,
+        fun(Value) -> deliver_metricfamily(Req, Value) end,
         Data
     ).
+
+deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
+    case Type of
+        counter -> cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
+        gauge -> cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
+        _ -> cowboy_req:stream_body(["# TYPE ", Name, " unknown\n"], nofin, Req)
+    end,
+    case MetricValue of
+        Value when is_number(Value) ->
+            VStr = strnum(Value),
+            cowboy_req:stream_body([<<Name/binary, " ">>, VStr, "\n"], nofin, Req);
+        Map when is_map(Map) ->
+            MIo = serialize_proplist(maps:to_list(Map)),
+            cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req);
+        MappedValues when is_list(MappedValues) ->
+            MIo = serialize_proplist(MappedValues),
+            cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req)
+    end.
 
 serialize_proplist(List) ->
     MIo = lists:map(

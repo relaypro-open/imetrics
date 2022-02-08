@@ -9,6 +9,13 @@
   - [x] Include `# EOF` as required by the standard
   - [x] Update `Content-Type` header
   - [ ] Include `TYPE` metric descriptor
+    - [x] `counter`
+    - [x] `gauge`
+    - [ ] `histogram`
+    - [ ] `gaugehistogram`
+    - [ ] `stateset`
+    - [ ] `info`
+    - [x] `unknown`
   - [ ] Update handling of mapped data to convert mapped counters and stats maps to tagged metric sets
 - [x] Convert from `mod_esi` to `cowboy` to surface data at `/metrics` URL path (required by the standard)
 - [ ] Extend `imetrics` to support additional OpenMetrics features
