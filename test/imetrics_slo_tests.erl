@@ -3,13 +3,11 @@
 
 start() ->
     application:load(imetrics),
-    application:start(inets),
-    application:start(imetrics),
+    application:ensure_all_started(imetrics),
     {ok, _} = imetrics:register_slo(eunit, #{size => 128, hwm => 1024*100}).
 
 stop(_Fixture) ->
-    application:stop(imetrics),
-    application:stop(inets).
+    application:stop(imetrics).
 
 %% add tests
 slo_test_() ->

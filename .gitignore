@@ -3,3 +3,4 @@
 ebin
 *.swp
 _build
+.vscode

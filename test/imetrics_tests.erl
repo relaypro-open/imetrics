@@ -3,14 +3,12 @@
 
 start() ->
     application:load(imetrics),
-    application:set_env(imetrics, http_server_port, 0),
-    application:start(inets),
-    application:start(imetrics),
+    application:set_env(imetrics, http_server_port, 8086),
+    application:ensure_all_started(imetrics),
     #{}.
 
 stop(_Fixture) ->
-    application:stop(imetrics),
-    application:stop(inets).
+    application:stop(imetrics).
 
 %% add tests
 add_test_() ->
