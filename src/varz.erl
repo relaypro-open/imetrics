@@ -3,9 +3,6 @@
 -export([init/2, terminate/3]).
 -export([get/1, counters/1, gauges/1, hist/1, hist_percentiles/1, slo/1]).
 
-% get_stacktrace
--compile(nowarn_deprecated_function).
-
 % cowboy functions:
 init(Req, State) ->
     [<<"varz">>, FuncNameBinary] = string:split(cowboy_req:binding(func, Req), ":"),
