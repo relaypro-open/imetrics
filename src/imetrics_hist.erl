@@ -207,13 +207,13 @@ metadata(Name) ->
             erlang:error(badarg)
     end.
 
-compute_bucket([Min, _Max], _NumBuckets, Value) when Value =< Min ->
+compute_bucket([Min, _Max], _NumBuckets, Value) when Value < Min ->
     0;
 compute_bucket([_Min, Max], NumBuckets, Value) when Value >= Max ->
     NumBuckets+1;
 compute_bucket([Min, Max], NumBuckets, Value) ->
     StepSize = (Max - Min) / NumBuckets,
-    Pos = trunc(Value / StepSize),
+    Pos = trunc((Value - Min) / StepSize),
     Pos+1.
 
 compute_bounding_value([_Min, Max], NumBuckets, BucketPos) when BucketPos > NumBuckets ->
