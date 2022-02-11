@@ -167,6 +167,10 @@ http_test_varz(#{port := Port}) ->
     ].
 
 http_test_openmetrics(#{port := Port}) ->
+    % set up an additional histogram
+    imetrics:hist(hist, [1, 13], 12),
+    [imetrics_hist:add(hist, N) || N <- [1, 1, 2, 3, 5, 8]],
+
     Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
     {ok, {Status, _Headers, Body}} = 
         httpc:request(get, {Url, []}, [], []),
@@ -187,6 +191,16 @@ http_test_openmetrics(#{port := Port}) ->
         "mapped_counter key:1",
         "# TYPE mapped_gauge unknown",
         "mapped_gauge key:1.5",
+        "# TYPE hist histogram",
+        "hist_bucket{le=\"1\"} 2",
+        "hist_bucket{le=\"2.0\"} 3",
+        "hist_bucket{le=\"3.0\"} 4",
+        "hist_bucket{le=\"4.0\"} 4", % the bucket before 5 is included to pin the value between 4 and 5
+        "hist_bucket{le=\"5.0\"} 5",
+        "hist_bucket{le=\"7.0\"} 5", % same here
+        "hist_bucket{le=\"8.0\"} 6",
+        "hist_bucket{le=\"9.0\"} 6", % and here
+        "hist_bucket{le=\"+Inf\"} 6"
         "# EOF"],
     Res2 = string:join(Res, "\n") ++ "\n",
     [
