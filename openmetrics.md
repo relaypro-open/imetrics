@@ -8,20 +8,20 @@
 - [ ] Modify `openmetrics` module to surface data compliant with the standard:
   - [x] Include `# EOF` as required by the standard
   - [x] Update `Content-Type` header
-  - [ ] Include `TYPE` metric descriptor
+  - [ ] Include `TYPE` metric descriptor and support for main metric types
     - [x] `counter`
     - [x] `gauge`
     - [x] `unknown`
+    - [ ] `summary` (as a way to surface precomputed percentiles from histograms)
   - [ ] Update handling of mapped data to convert mapped counters and stats maps to tagged metric sets
 - [x] Convert from `mod_esi` to `cowboy` to surface data at `/metrics` URL path (required by the standard)
 - [ ] Extend `imetrics` to support additional OpenMetrics features
   - [ ] `UNIT` metric descriptor
+  - [ ] Exemplars
   - [ ] `HELP` metric descriptor
   - [ ] Tags on a per-metric level
-  - [ ] Exemplars
   - [ ] New metric types?
     - [ ] `histogram` and `gaugehistogram`
-    - [ ] `summary` (as a way to surface precomputed percentiles?)
     - [ ] `stateset`
     - [ ] `info`
   - [ ] More?
