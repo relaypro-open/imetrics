@@ -46,7 +46,9 @@ deliver_data(Req, Type, Data) ->
 deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
     case Type of
         counter -> cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
+        mapped_counter -> cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
         gauge -> cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
+        mapped_gauge -> cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
         _ -> cowboy_req:stream_body(["# TYPE ", Name, " unknown\n"], nofin, Req)
     end,
     case MetricValue of
@@ -54,26 +56,27 @@ deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
             VStr = strnum(Value),
             cowboy_req:stream_body([<<Name/binary, " ">>, VStr, "\n"], nofin, Req);
         Map when is_map(Map) ->
-            MIo = serialize_proplist(maps:to_list(Map)),
-            cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req);
+            MappedValues = maps:to_list(Map),
+            Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
+            deliver_mapped_metric(Req, Name, Dim, MappedValues);
         MappedValues when is_list(MappedValues) ->
-            MIo = serialize_proplist(MappedValues),
-            cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req)
+            Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
+            deliver_mapped_metric(Req, Name, Dim, MappedValues)
     end,
     ok.
 
-serialize_proplist(List) ->
-    MIo = lists:map(
-        fun
-            ({Key = <<"$dim">>, VStr}) ->
-                [Key, ":", VStr];
-            ({Key, Value}) when is_number(Value); Value =:= 'NaN' ->
-                VStr = strnum(Value),
-                [Key, ":", VStr]
-        end,
-        List
-    ),
-    string:join(MIo, " ").
+deliver_mapped_metric(Req, Name, Dim, [{Key, Value} | Tail]) ->
+    case Key of
+        <<"$dim">> ->
+            deliver_mapped_metric(Req, Name, Dim, Tail);
+        _ ->
+            cowboy_req:stream_body(
+                [<<Name/binary, "{">>, Dim, "=\"", Key, "\"} ", strnum(Value), "\n"], nofin, Req
+            ),
+            deliver_mapped_metric(Req, Name, Dim, Tail)
+    end;
+deliver_mapped_metric(_Req, _Name, _Dim, []) ->
+    ok.
 
 strnum('NaN') -> "NaN";
 strnum(N) when is_integer(N) -> integer_to_list(N);
