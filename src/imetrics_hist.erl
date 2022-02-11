@@ -151,16 +151,16 @@ approximate_percentiles_fold([{PName, 0}|Rest], Buckets, Min, Max, N, NZMin, NZM
                  undefined ->
                      Accum;
                  _ ->
-                     io:format("pname=~p, pcount=~p, nzmin=~p~n", [PName, 0, NZMin]),
+                     %io:format("pname=~p, pcount=~p, nzmin=~p~n", [PName, 0, NZMin]),
                      [{PName, NZMin}|Accum]
              end,
     approximate_percentiles_fold(Rest, Buckets, Min, Max, N, NZMin, NZMax, RunningSum, Accum2);
-approximate_percentiles_fold([{PName, PCount}|Rest], [], Min, Max, N, NZMin, NZMax, RunningSum, Accum) ->
+approximate_percentiles_fold([{PName, _PCount}|Rest], [], Min, Max, N, NZMin, NZMax, RunningSum, Accum) ->
     Accum2 = case NZMax of
                  undefined ->
                      Accum;
                  _ ->
-                     io:format("pname=~p, pcount=~p, nzmax=~p~n", [PName, PCount, NZMax]),
+                     %io:format("pname=~p, pcount=~p, nzmax=~p~n", [PName, _PCount, NZMax]),
                      [{PName, NZMax}|Accum]
              end,
     approximate_percentiles_fold(Rest, [], Min, Max, N, NZMin, NZMax, RunningSum, Accum2);
@@ -172,7 +172,7 @@ approximate_percentiles_fold(PCounts=[{PName, PCount}|PRest], Buckets=[{BKey, BV
             % this percentile is contained in this bucket.
             % continue to iterate other percentiles without incrementing running sum
             [B0, B1] = compute_bounding_value([Min, Max], N, BKey),
-            io:format("runningsum=~p, nextsum=~p, pname=~p, pcount=~p, b0=~p, b1=~p~n", [RunningSum, NextSum, PName, PCount, B0, B1]),
+            %io:format("runningsum=~p, nextsum=~p, pname=~p, pcount=~p, b0=~p, b1=~p~n", [RunningSum, NextSum, PName, PCount, B0, B1]),
             Accum2 = [{PName, (B0+B1)/2.0}|Accum],
             approximate_percentiles_fold(PRest, Buckets, Min, Max, N, NZMin, NZMax, RunningSum, Accum2);
         true ->
@@ -235,14 +235,7 @@ compute_bucket([_Min, Max], NumBuckets, Value) when Value > Max ->
 compute_bucket([Min, Max], NumBuckets, Value) ->
     StepSize = (Max - Min) / NumBuckets,
     Pos = trunc((Value - Min) / StepSize),
-    Pos.
-
-% TODO: ^ changing the above line to `Pos.` instead of `Pos+1.` does fix the bug
-% with histogram computation, but changes histogram behavior in imetrics on the whole,
-% which is problematic. A number of tests are broken as of this commit. Further
-% analysis may be needed to determine if the above change makes sense, and if so, what
-% changes are necessary to `imetrics_hist` and/or `imetrics_hist_tests` to fix
-% these issues.
+    Pos+1.
 
 compute_bounding_value([_Min, Max], NumBuckets, BucketPos) when BucketPos > NumBuckets ->
     [Max, Max];

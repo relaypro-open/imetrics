@@ -11,17 +11,16 @@
   - [ ] Include `TYPE` metric descriptor
     - [x] `counter`
     - [x] `gauge`
-    - [x] `histogram`
     - [x] `unknown`
   - [ ] Update handling of mapped data to convert mapped counters and stats maps to tagged metric sets
 - [x] Convert from `mod_esi` to `cowboy` to surface data at `/metrics` URL path (required by the standard)
 - [ ] Extend `imetrics` to support additional OpenMetrics features
-  - [ ] `HELP` metric descriptor
   - [ ] `UNIT` metric descriptor
+  - [ ] `HELP` metric descriptor
   - [ ] Tags on a per-metric level
   - [ ] Exemplars
   - [ ] New metric types?
-    - [ ] `gaugehistogram` (or realistically, providing a way to specify histogram type in `imetrics_hist` module)
+    - [ ] `histogram` and `gaugehistogram`
     - [ ] `summary` (as a way to surface precomputed percentiles?)
     - [ ] `stateset`
     - [ ] `info`

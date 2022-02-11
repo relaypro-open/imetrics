@@ -16,9 +16,8 @@ get(Req) ->
     ),
     Req2 = cowboy_req:stream_reply(200, Req1),
     {ok, Req3} = handle(types, Req2, fun imetrics:get_with_types/0),
-    {ok, Req4} = handle(hist, Req3, fun imetrics_hist:get_all_nobin/0),
-    cowboy_req:stream_body("# EOF\n", nofin, Req4),
-    {ok, cowboy_req:stream_trailers(#{}, Req4)}.
+    cowboy_req:stream_body("# EOF\n", nofin, Req3),
+    {ok, cowboy_req:stream_trailers(#{}, Req3)}.
 
 handle(Type, Req, DataFun) ->
     try
@@ -39,83 +38,10 @@ handle(Type, Req, DataFun) ->
 deliver_data(Req, Type, Data) ->
     Func =
         case Type of
-            types -> fun deliver_metricfamily/2;
-            hist -> fun deliver_hist/2
+            types -> fun deliver_metricfamily/2
         end,
     lists:foreach(fun(Value) -> Func(Req, Value) end, Data),
     ok.
-
-% this function gets the "less than or equal" value for a particular bucket
-% this special case up top is to allow the last bucket to encompass all values
-hist_get_bucket_max(N, {NumBuckets, _}) when N =:= NumBuckets + 1 ->
-    "+Inf";
-hist_get_bucket_max(N, {NumBuckets, [Min, Max]}) when N =< NumBuckets ->
-    [_, BucketMax] = imetrics_hist:compute_bounding_value([Min, Max], NumBuckets, N),
-    strnum(BucketMax).
-
-% the basic function to deliver a histogram. it computes the bucket stats, sorts the
-% buckets, and passes it to the recursive version
-deliver_hist(Req, {Name, Data}) ->
-    cowboy_req:stream_body(["# TYPE ", Name, " histogram\n"], nofin, Req),
-
-    % retrieve the bucket statistics
-    NumBuckets = proplists:get_value(<<"n">>, Data),
-    [Min, Max] = [proplists:get_value(<<"m">>, Data), proplists:get_value(<<"M">>, Data)],
-
-    % sort the list. also, if we're missing a "+Inf" bucket, add it.
-    SortedList =
-        case proplists:is_defined(NumBuckets + 1, Data) of
-            true -> lists:sort(Data);
-            false -> lists:sort([{NumBuckets + 1, 0} | Data])
-        end,
-
-    deliver_hist(Req, Name, {NumBuckets, [Min, Max]}, {_Acc = 0, _PrevBucket = -1, SortedList}).
-
-% the recursive version, which delivers each bucket and recurses, keeping track
-% of an accumulator, since each bucket should include the tally of the previous.
-deliver_hist(Req, Name, HistStats, {Acc, PrevBucket, [_Bucket = {N, Value} | Tail]}) when
-    is_integer(N)
-->
-    % if we jumped over more than one bucket, include the bucket immediately before
-    % the current bucket to minimize uncertainty
-    case (PrevBucket < N - 1) and (Value > 0) of
-        true ->
-            cowboy_req:stream_body(
-                bucket_line(Name, hist_get_bucket_max(N - 1, HistStats), integer_to_binary(Acc)),
-                nofin,
-                Req
-            );
-        false ->
-            noop
-    end,
-
-    % print the current bucket regardless
-    cowboy_req:stream_body(
-        bucket_line(Name, hist_get_bucket_max(N, HistStats), integer_to_binary(Acc + Value)),
-        nofin,
-        Req
-    ),
-
-    % recurse
-    deliver_hist(Req, Name, HistStats, {Acc + Value, N, Tail});
-% skip the entries in the list with binary keys, they're stats about the histogram which we've already processed
-deliver_hist(Req, Name, HistStats, {Acc, PrevBucket, [_Bucket = {N, _Value} | Tail]}) when
-    is_binary(N)
-->
-    deliver_hist(Req, Name, HistStats, {Acc, PrevBucket, Tail});
-% base case, all buckets have been printed.
-deliver_hist(_Req, _Name, _HistStats, {_Acc, _PrevBucket, []}) ->
-    ok.
-
-bucket_line(Name, BucketMax, Value) ->
-    [
-        Name,
-        "_bucket{le=\"",
-        BucketMax,
-        "\"} ",
-        Value,
-        "\n"
-    ].
 
 deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
     case Type of
