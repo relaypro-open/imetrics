@@ -145,6 +145,9 @@ start_http() ->
     F#{port => Port}.
 
 http_test(#{port := Port}) ->
+    http_test_varz(#{port => Port}) ++ http_test_openmetrics(#{port => Port}).
+
+http_test_varz(#{port := Port}) ->
     Url = "http://localhost:"++integer_to_list(Port)++"/imetrics/varz:get",
     {ok, {Status, _Headers, Body}} = 
         httpc:request(get, {Url, []}, [], []),
@@ -161,6 +164,34 @@ http_test(#{port := Port}) ->
     [
         ?_assertEqual(200, Code),
         ?_assertEqual(Res2, Body)
+    ].
+
+http_test_openmetrics(#{port := Port}) ->
+    Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
+    {ok, {Status, _Headers, Body}} = 
+        httpc:request(get, {Url, []}, [], []),
+    {_Vsn, Code, _Friendly} = Status,
+
+    Res = [
+        "# TYPE counter counter",
+        "counter 1",
+        "# TYPE counter_tuple counter",
+        "counter_tuple 1",
+        "# TYPE counter:tuple:colon counter",
+        "counter:tuple:colon 1",
+        "# TYPE fn_gauge gauge",
+        "fn_gauge 1.5",
+        "# TYPE gauge gauge",
+        "gauge 1.5",
+        "# TYPE mapped_counter counter",
+        "mapped_counter{map_key=\"key\"} 1",
+        "# TYPE mapped_gauge gauge",
+        "mapped_gauge{map_key=\"key\"} 1.5",
+        "# EOF"],
+    Res2 = string:join(Res, "\n") ++ "\n",
+    [
+        ?_assertEqual(Res2, Body),
+        ?_assertEqual(200, Code)
     ].
 
 %% tick/tock tests

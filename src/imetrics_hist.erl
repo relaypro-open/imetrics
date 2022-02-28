@@ -1,9 +1,9 @@
 -module(imetrics_hist).
 
--export([new/3, add/2, dump/1, get/1, get_all/0, subtract/2,
+-export([new/3, add/2, dump/1, get/1, get_all/0, get_all_nobin/0, subtract/2,
         approximate_percentiles/2]).
 
--export([compute_bucket/3]).
+-export([compute_bucket/3, compute_bounding_value/3]).
 
 -define(CATCH_KNOWN_EXC(X),
     try
@@ -53,6 +53,27 @@ get_all() ->
                      NBin = imetrics_utils:bin(N),
                      NData = maps:get(NBin, A, []),
                      A#{ NBin => [{integer_to_binary(Bucket), Count}|NData] };
+                (_, A) ->
+                     A
+             end, #{}, ?MODULE),
+           maps:to_list(Map)
+       end
+      ).
+
+get_all_nobin() ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           Map = ets:foldl(
+             fun({{N, metadata}, [Min, Max], NumBuckets}, A) ->
+                     NBin = imetrics_utils:bin(N),
+                     NData = maps:get(NBin, A, []),
+                     A#{ NBin => [{<<"m">>, Min},
+                               {<<"M">>, Max},
+                               {<<"n">>, NumBuckets}|NData] };
+                ({{N, Bucket}, Count}, A) ->
+                     NBin = imetrics_utils:bin(N),
+                     NData = maps:get(NBin, A, []),
+                     A#{ NBin => [{Bucket, Count}|NData] };
                 (_, A) ->
                      A
              end, #{}, ?MODULE),

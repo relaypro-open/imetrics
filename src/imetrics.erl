@@ -12,7 +12,7 @@
 
 -export([stats/1, set_stats/2]).
 
--export([get/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2, foldl_slo/3, get_slo/2]).
+-export([get/0, get_with_types/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2, foldl_slo/3, get_slo/2]).
 
 -export([clean_checkpoints/0]).
 
@@ -240,11 +240,14 @@ stop_tick_s(Ticks, RefOrName) ->
     end.
 
 get() ->
-    Counters = get_unmapped(imetrics_counters),
-    Gauges = get_unmapped(imetrics_gauges),
-    Stats = get_unmapped(imetrics_stats),
-    MappedCounters = get_mapped(imetrics_mapped_counters),
-    MappedGauges = get_mapped(imetrics_mapped_gauges),
+    [Metric || {_, Metric} <- get_with_types()].
+
+get_with_types() ->
+    Counters = [{counter, Metric} || Metric <- get_unmapped(imetrics_counters)],
+    Gauges = [{gauge, Metric} || Metric <- get_unmapped(imetrics_gauges)],
+    Stats = [{stat, Metric} || Metric <- get_unmapped(imetrics_stats)],
+    MappedCounters = [{mapped_counter, Metric} || Metric <- get_mapped(imetrics_mapped_counters)],
+    MappedGauges = [{mapped_gauge, Metric} || Metric <- get_mapped(imetrics_mapped_gauges)],
     Counters ++ Gauges ++ MappedCounters ++ MappedGauges ++ Stats.
 
 get_counters() ->

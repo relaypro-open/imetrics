@@ -9,7 +9,7 @@ Dependencies
 
 - *No R16 support*: We require the "newer" ets functions such as ets:update_counter/4.
 - *cowboy*: The `cowboy` application (and its dependencies) must be started before you start `imetrics`
-    - `cowboy` depends on `ranch`, `cowlib`, `ssl`, and `crypto` [(see here)](https://ninenines.eu/docs/en/cowboy/2.8/manual/)
+  - `cowboy` depends on `ranch`, `cowlib`, `ssl`, and `crypto` [(see here)](https://ninenines.eu/docs/en/cowboy/2.8/manual/)
 
 Getting started
 ---------------
@@ -27,7 +27,7 @@ Start the imetrics app and its dependencies:
 application:ensure_all_started(imetrics).
 ```
 
-Next, decide if you want a counter or a gauge. 
+Next, decide if you want a counter or a gauge.
 
 ### Counters ###
 
@@ -125,10 +125,34 @@ associated key.
 All the metric names and mapping keys are normalized as binaries.
 
 ### With HTTP ###
+imetrics starts an HTTP server that returns a plaintext representation of all the
+metrics compatible with the [OpenMetrics standard.](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md)
+The URI for accessing this data is `/metrics`.
+
+```
+$ curl localhost:8085/metrics
+# TYPE client_connections counter
+client_connections 1
+# TYPE velocity gauge
+velocity 50.5
+# TYPE http_responses counter
+http_responses{map_key="200"} 1
+http_responses{map_key="404"} 1
+# TYPE cpu_load_avg gauge
+cpu_load_avg{map_key="1min"} 0.1
+cpu_load_avg{map_key="5min"} 3.4
+# EOF
+```
+### With HTTP (Legacy) ###
+
+> This section is preserved for backwards compatability.
+
 imetrics starts a very simple HTTP server that returns an easily parseable
 plaintext representation of all the metrics. The URI for accessing this data
 is `/imetrics/varz:get`. ~~The somewhat strange URI format is necessary to make
-proper use of the built-in HTTP server in Erlang. (See `mod_esi`)~~ (Though `mod_esi` is no longer used, this URI format is now maintained for backwards compatibility.)
+proper use of the built-in HTTP server in Erlang. (See `mod_esi`)~~ (Though
+`mod_esi` is no longer used, this URI format is now maintained for backwards
+compatibility.)
 
 ```
 $ curl localhost:8085/imetrics/varz:get
@@ -140,7 +164,16 @@ cpu_load_avg 1min:0.1 5min:3.4
 
 Configuration
 -------------
-| env var            | default                       | desc                                                                            |
-|--------------------|-------------------------------|---------------------------------------------------------------------------------|
-| `http_server_port`   | `8085`                          | Listening port                                                                  |
-| `separator`	        | `<<"_">>`                     | binary string used to separate tuple elements for Name, Key                     |
+
+| env var            | default   | desc                                                        |
+| ------------------ | --------- | ----------------------------------------------------------- |
+| `http_server_port` | `8085`    | Listening port                                              |
+| `separator`        | `<<"_">>` | binary string used to separate tuple elements for Name, Key |
+
+## OpenMetrics conversion
+
+imetrics is currently undergoing an effort to update the format of metrics it
+serves over HTTP. The old format is still served at `/imetrics/varz:get`, and it
+is a simple plaintext representation of the metrics. Work is ongoing to convert this
+representation to the [OpenMetrics standard.](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md)
+This is currently served at `/metrics`, and work continues on the [`feature/openmetrics` branch](https://github.com/relaypro-open/imetrics/tree/feature/openmetrics).

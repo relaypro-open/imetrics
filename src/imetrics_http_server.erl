@@ -98,7 +98,10 @@ handle_cast({start}, State) ->
 start_server(Port) ->
     Dispatch = cowboy_router:compile([
         % '_' here is a match for all domain names
-        {'_', [{"/imetrics/:func", varz, []}]}
+        {'_', [
+            {"/imetrics/:func", varz, []},
+            {"/metrics", openmetrics, []}
+        ]}
     ]),
     cowboy:start_clear(
         ?MODULE,
