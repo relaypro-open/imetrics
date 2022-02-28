@@ -35,13 +35,12 @@ handle(Type, Req, DataFun) ->
             ok
     end.
 
-deliver_data(Req, Type, Data) ->
-    Func =
-        case Type of
-            types -> fun deliver_metricfamily/2
-        end,
-    lists:foreach(fun(Value) -> Func(Req, Value) end, Data),
-    ok.
+% The _Type parameter here allows multiple versions of the deliver_data/3 function
+% to deliver different types of data. 'types' here refers to a list of metrics,
+% annotated with the "type" of their metric, such as those returned by imetrics:get_with_types/0
+deliver_data(Req, _Type = types, Data) ->
+    Func = fun deliver_metricfamily/2,
+    lists:foreach(fun(Value) -> Func(Req, Value) end, Data).
 
 deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
     case Type of
@@ -54,7 +53,7 @@ deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
     case MetricValue of
         Value when is_number(Value) ->
             VStr = strnum(Value),
-            cowboy_req:stream_body([<<Name/binary, " ">>, VStr, "\n"], nofin, Req);
+            cowboy_req:stream_body([Name, " ", VStr, "\n"], nofin, Req);
         Map when is_map(Map) ->
             MappedValues = maps:to_list(Map),
             Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
@@ -62,8 +61,7 @@ deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
         MappedValues when is_list(MappedValues) ->
             Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
             deliver_mapped_metric(Req, Name, Dim, MappedValues)
-    end,
-    ok.
+    end.
 
 deliver_mapped_metric(Req, Name, Dim, [{Key, Value} | Tail]) ->
     case Key of
