@@ -15,6 +15,7 @@
   - [x] Update handling of mapped data to convert mapped counters and stats maps to tagged metric sets
   - [ ] Metric type for stats
 - [x] Convert from `mod_esi` to `cowboy` to surface data at `/metrics` URL path (required by the standard)
+- [x] Add `openmetrics_strict_compat` application environment variable (causes only forwards-incompatible metrics to exist on the legacy endpoint and not exist on the OpenMetrics endpoint)
 - [ ] Extend `imetrics` to support additional OpenMetrics features
   - [ ] Exemplars
   - [ ] `UNIT` metric descriptor

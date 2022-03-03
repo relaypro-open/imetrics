@@ -240,7 +240,17 @@ stop_tick_s(Ticks, RefOrName) ->
     end.
 
 get() ->
-    [Metric || {_, Metric} <- get_with_types()].
+    case application:get_env(imetrics, strict_openmetrics_compat, false) of
+        false ->
+            [Metric || {_, Metric} <- get_with_types()];
+        true ->
+            [
+                Metric
+             || {Type, Metric} <- get_with_types(),
+                not ((Type =:= counter) or (Type =:= gauge) or (Type =:= mapped_counter) or
+                    (Type =:= mapped_gauge))
+            ]
+    end.
 
 get_with_types() ->
     Counters = [{counter, Metric} || Metric <- get_unmapped(imetrics_counters)],
