@@ -13,7 +13,19 @@ terminate(_Reason, _Req, _State) ->
     ok.
 
 get(Req) ->
-    handle(Req, fun imetrics:get/0).
+    case application:get_env(imetrics, strict_openmetrics_compat, false) of
+        false ->
+            handle(Req, fun imetrics:get/0);
+        true ->
+            handle(Req, fun() ->
+                [
+                    Metric
+                 || {Type, Metric} <- imetrics:get_with_types(),
+                    not ((Type =:= counter) or (Type =:= gauge) or (Type =:= mapped_counter) or
+                        (Type =:= mapped_gauge))
+                ]
+            end)
+    end.
 
 counters(Req) ->
     case application:get_env(imetrics, strict_openmetrics_compat, false) of
