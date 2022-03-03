@@ -165,10 +165,11 @@ cpu_load_avg 1min:0.1 5min:3.4
 Configuration
 -------------
 
-| env var            | default   | desc                                                        |
-| ------------------ | --------- | ----------------------------------------------------------- |
-| `http_server_port` | `8085`    | Listening port                                              |
-| `separator`        | `<<"_">>` | binary string used to separate tuple elements for Name, Key |
+| env var                     | default   | desc                                                         |
+| --------------------------- | --------- | ------------------------------------------------------------ |
+| `http_server_port`          | `8085`    | Listening port                                               |
+| `separator`                 | `<<"_">>` | binary string used to separate tuple elements for Name, Key  |
+| `strict_openmetrics_compat` | `false`   | If set to `true`, metrics will only display on the old HTTP endpoint if they aren't compatible with the OpenMetrics endpoint. Metrics will only display on one endpoint or the other, never both. |
 
 ## OpenMetrics conversion
 

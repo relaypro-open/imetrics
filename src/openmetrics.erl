@@ -43,24 +43,34 @@ deliver_data(Req, _Type = types, Data) ->
     lists:foreach(fun(Value) -> Func(Req, Value) end, Data).
 
 deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
-    case Type of
-        counter -> cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
-        mapped_counter -> cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
-        gauge -> cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
-        mapped_gauge -> cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
-        _ -> cowboy_req:stream_body(["# TYPE ", Name, " unknown\n"], nofin, Req)
-    end,
-    case MetricValue of
-        Value when is_number(Value) ->
+    ShouldPrintMetric =
+        case {Type, application:get_env(imetrics, strict_openmetrics_compat, false)} of
+            {counter, _} ->
+                cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
+            {mapped_counter, _} ->
+                cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
+            {gauge, _} ->
+                cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
+            {mapped_gauge, _} ->
+                cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
+            {_, false} ->
+                cowboy_req:stream_body(["# TYPE ", Name, " unknown\n"], nofin, Req);
+            {_, true} ->
+                not_ok
+        end,
+    case {ShouldPrintMetric, MetricValue} of
+        {ok, Value} when is_number(Value) ->
             VStr = strnum(Value),
             cowboy_req:stream_body([Name, " ", VStr, "\n"], nofin, Req);
-        Map when is_map(Map) ->
+        {ok, Map} when is_map(Map) ->
             MappedValues = maps:to_list(Map),
             Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
             deliver_mapped_metric(Req, Name, Dim, MappedValues);
-        MappedValues when is_list(MappedValues) ->
+        {ok, MappedValues} when is_list(MappedValues) ->
             Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
-            deliver_mapped_metric(Req, Name, Dim, MappedValues)
+            deliver_mapped_metric(Req, Name, Dim, MappedValues);
+        {not_ok, _} ->
+            ok
     end.
 
 deliver_mapped_metric(Req, Name, Dim, [{Key, Value} | Tail]) ->

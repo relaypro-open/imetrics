@@ -117,6 +117,9 @@ start_get() ->
     application:set_env(imetrics, separator, <<":">>),
     imetrics:add({counter, tuple, colon}),
     application:unset_env(imetrics, separator),
+    Stats = imetrics:stats(stats),
+    Stats2 = imetrics_stats:update(10, Stats),
+    imetrics:set_stats(stats, Stats2),
     F.
 
 get_test(_Fixture) ->
@@ -128,7 +131,9 @@ get_test(_Fixture) ->
         ?_assertEqual(1.5, proplists:get_value(<<"gauge">>, Data)),
         ?_assertEqual([{<<"key">>, 1.5}],
             proplists:get_value(<<"mapped_gauge">>, Data)),
-        ?_assertEqual(1.5, proplists:get_value(<<"fn_gauge">>, Data))
+        ?_assertEqual(1.5, proplists:get_value(<<"fn_gauge">>, Data)),
+        ?_assertEqual(#{<<"max">> => 10, <<"min">> => 10, <<"n">> => 1, <<"sum">> => 10,
+            <<"sum2">> => 100}, proplists:get_value(<<"stats">>, Data))
     ].
 
 %% http tests
@@ -145,7 +150,8 @@ start_http() ->
     F#{port => Port}.
 
 http_test(#{port := Port}) ->
-    http_test_varz(#{port => Port}) ++ http_test_openmetrics(#{port => Port}).
+    http_test_varz(#{port => Port}) ++ http_test_openmetrics(#{port => Port}) ++
+    http_test_varz_strict(#{port => Port}) ++ http_test_openmetrics_strict(#{port => Port}).
 
 http_test_varz(#{port := Port}) ->
     Url = "http://localhost:"++integer_to_list(Port)++"/imetrics/varz:get",
@@ -159,7 +165,8 @@ http_test_varz(#{port := Port}) ->
         "fn_gauge 1.5",
         "gauge 1.5",
         "mapped_counter key:1",
-        "mapped_gauge key:1.5"],
+        "mapped_gauge key:1.5",
+        "stats max:10 min:10 n:1 sum:10 sum2:100"],
     Res2 = string:join(Res, "\n") ++ "\n",
     [
         ?_assertEqual(200, Code),
@@ -170,6 +177,57 @@ http_test_openmetrics(#{port := Port}) ->
     Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
     {ok, {Status, _Headers, Body}} = 
         httpc:request(get, {Url, []}, [], []),
+    {_Vsn, Code, _Friendly} = Status,
+
+    Res = [
+        "# TYPE counter counter",
+        "counter 1",
+        "# TYPE counter_tuple counter",
+        "counter_tuple 1",
+        "# TYPE counter:tuple:colon counter",
+        "counter:tuple:colon 1",
+        "# TYPE fn_gauge gauge",
+        "fn_gauge 1.5",
+        "# TYPE gauge gauge",
+        "gauge 1.5",
+        "# TYPE mapped_counter counter",
+        "mapped_counter{map_key=\"key\"} 1",
+        "# TYPE mapped_gauge gauge",
+        "mapped_gauge{map_key=\"key\"} 1.5",
+        "# TYPE stats unknown",
+        "stats{map_key=\"max\"} 10",
+        "stats{map_key=\"min\"} 10",
+        "stats{map_key=\"n\"} 1",
+        "stats{map_key=\"sum\"} 10",
+        "stats{map_key=\"sum2\"} 100",
+        "# EOF"],
+    Res2 = string:join(Res, "\n") ++ "\n",
+    [
+        ?_assertEqual(Res2, Body),
+        ?_assertEqual(200, Code)
+    ].
+
+http_test_varz_strict(#{port := Port}) ->
+    Url = "http://localhost:"++integer_to_list(Port)++"/imetrics/varz:get",
+    application:set_env(imetrics, strict_openmetrics_compat, true),
+    {ok, {Status, _Headers, Body}} = 
+        httpc:request(get, {Url, []}, [], []),
+    application:unset_env(imetrics, strict_openmetrics_compat),
+    {_Vsn, Code, _Friendly} = Status,
+
+    Res = ["stats max:10 min:10 n:1 sum:10 sum2:100"],
+    Res2 = string:join(Res, "\n") ++ "\n",
+    [
+        ?_assertEqual(200, Code),
+        ?_assertEqual(Res2, Body)
+    ].
+
+http_test_openmetrics_strict(#{port := Port}) ->
+    Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
+    application:set_env(imetrics, strict_openmetrics_compat, true),
+    {ok, {Status, _Headers, Body}} = 
+        httpc:request(get, {Url, []}, [], []),
+    application:unset_env(imetrics, strict_openmetrics_compat),
     {_Vsn, Code, _Friendly} = Status,
 
     Res = [
