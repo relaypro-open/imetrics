@@ -2,9 +2,9 @@
 
 -include("../include/imetrics.hrl").
 
--export([add/1, add/2, add_m/2, add_m/3]).
+-export([add/1, add/2, add/3, add_m/2, add_m/3]).
 
--export([set_gauge/2, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge_m/3]).
+-export([set_gauge/2, set_gauge/3, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge/3, update_gauge_m/3]).
 
 -export([set_counter_dimension/2, register_slo/2]).
 
@@ -41,14 +41,19 @@
 %% ---------------------------------------------------------
 
 add(Name) ->
-    add(Name, 1).
+    add(Name, #{}, 1).
 
+add(Name, Tags) when is_map(Tags) ->
+    add(Name, Tags, 1);
 add(Name, Value) ->
+    add(Name, #{}, Value).
+
+add(Name, Tags, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
             true = is_integer(Value),
-            NameBin = imetrics_utils:bin(Name),
-            ets:update_counter(imetrics_counters, NameBin, Value, {NameBin, 0})
+            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+            ets:update_counter(imetrics_counters, TagsWithName, Value, {TagsWithName, 0})
         end
     ).
 
@@ -56,64 +61,46 @@ add_m(Name, Key) ->
     add_m(Name, Key, 1).
 
 add_m(Name, Key, Value) ->
-    ?CATCH_KNOWN_EXC(
-        begin
-            true = is_integer(Value),
-            NameBin = imetrics_utils:bin(Name),
-            KeyBin = imetrics_utils:bin(Key),
-            Id = mapped_id(NameBin, KeyBin),
-            ets:update_counter(imetrics_mapped_counters, Id, Value, {Id, 0})
-        end
-    ).
+    add(Name, #{ map_key => Key }, Value).
 
 set_gauge(Name, Value) ->
+    set_gauge(Name, #{}, Value).
+
+set_gauge(Name, Tags, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
-            NameBin = imetrics_utils:bin(Name),
-            ets:insert(imetrics_gauges, {NameBin, Value}),
+            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+            ets:insert(imetrics_gauges, {TagsWithName, Value}),
             Value
         end
     ).
 
 set_gauge_m(Name, Key, Value) when is_number(Value); is_function(Value) ->
-    ?CATCH_KNOWN_EXC(
-        begin
-            NameBin = imetrics_utils:bin(Name),
-            KeyBin = imetrics_utils:bin(Key),
-            Id = mapped_id(NameBin, KeyBin),
-            ets:insert(imetrics_mapped_gauges, {Id, Value}),
-            Value
-        end
-    ).
+    set_gauge(Name, #{ map_key => Key }, Value).
 
+% despite its name, this function actually _increments_ a gauge
 update_gauge(Name, Value) ->
+    update_gauge(Name, #{}, Value).
+
+update_gauge(Name, Tags, Value) ->
     ?CATCH_KNOWN_EXC(
        begin
-           NameBin = imetrics_utils:bin(Name),
-           ets:update_counter(imetrics_gauges, NameBin, Value, {NameBin, 0})
+            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+            ets:update_counter(imetrics_gauges, TagsWithName, Value, {TagsWithName, 0})
        end
       ).
 
 update_gauge_m(Name, Key, Value) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           NameBin = imetrics_utils:bin(Name),
-           KeyBin = imetrics_utils:bin(Key),
-           Id = mapped_id(NameBin, KeyBin),
-           ets:update_counter(imetrics_mapped_gauges, Id, Value, {Id, 0})
-       end
-      ).
+    update_gauge(Name, #{ map_key => Key }, Value).
 
 set_counter_dimension(Name, Value) ->
     ?CATCH_KNOWN_EXC(
        begin
            NameBin = imetrics_utils:bin(Name),
-           KeyBin = imetrics_utils:bin(<<"$dim">>),
-           Id = mapped_id(NameBin, KeyBin),
            Value2 = if is_number(Value) -> Value;
                        true -> imetrics_utils:bin(Value)
                     end,
-           ets:insert(imetrics_mapped_counters, {Id, Value2}),
+           ets:insert(imetrics_map_keys, {NameBin, Value2}),
            Value2
        end
       ).
@@ -128,16 +115,10 @@ set_multigauge(Name, Dimension, Fun) when is_function(Fun)
                                           andalso is_atom(Dimension) ->
     ?CATCH_KNOWN_EXC(
        begin
-           WrappedFun = fun() ->
-                                case call_metrics_fun(Fun) of
-                                    List when is_list(List) ->
-                                        [{<<"$dim">>, imetrics_utils:bin(Dimension)}|List];
-                                    Other ->
-                                        Other
-                                end
-                        end,
            NameBin = imetrics_utils:bin(Name),
-           ets:insert(imetrics_mapped_gauges, {NameBin, WrappedFun}),
+           TagsWithName = imetrics_utils:bin(#{ name => NameBin }),
+           ets:insert(imetrics_map_keys, {NameBin, imetrics_utils:bin(Dimension)}),
+           ets:insert(imetrics_gauges, {TagsWithName#{ '_multigauge' => true }, Fun}),
            Fun
        end
       ).
@@ -240,25 +221,28 @@ stop_tick_s(Ticks, RefOrName) ->
     end.
 
 get() ->
-    [Metric || {_, Metric} <- get_with_types()].
+    Metrics = [{MetricName, MetricPoints} || {MetricName, {_Type, MetricPoints}} <- get_with_types()],
+    Metrics2 = simplify_unmapped(Metrics),
+    Metrics3 = simplify_mapped(Metrics2),
+    Metrics3.
 
 get_with_types() ->
-    Counters = [{counter, Metric} || Metric <- get_unmapped(imetrics_counters)],
-    Gauges = [{gauge, Metric} || Metric <- get_unmapped(imetrics_gauges)],
-    Stats = [{stat, Metric} || Metric <- get_unmapped(imetrics_stats)],
-    MappedCounters = [{mapped_counter, Metric} || Metric <- get_mapped(imetrics_mapped_counters)],
-    MappedGauges = [{mapped_gauge, Metric} || Metric <- get_mapped(imetrics_mapped_gauges)],
-    Counters ++ Gauges ++ MappedCounters ++ MappedGauges ++ Stats.
+    Counters = [{MetricName, {counter, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_counters)],
+    Gauges = [{MetricName, {gauge, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_gauges)],
+    Stats = [{MetricName, {stat, MetricPoints}} || {MetricName, MetricPoints} <- get_unmapped(imetrics_stats)],
+    Counters ++ Gauges ++ Stats.
 
 get_counters() ->
-    Counters = get_unmapped(imetrics_counters),
-    MappedCounters = get_mapped(imetrics_mapped_counters),
-    Counters ++ MappedCounters.
+    Counters = get_mapped(imetrics_counters),
+    Counters2 = simplify_unmapped(Counters),
+    Counters3 = simplify_mapped(Counters2, true),
+    Counters3.
 
 get_gauges() ->
-    Gauges = get_unmapped(imetrics_gauges),
-    MappedGauges = get_mapped(imetrics_mapped_gauges),
-    Gauges ++ MappedGauges.
+    Gauges = get_mapped(imetrics_gauges),
+    Gauges2 = simplify_unmapped(Gauges),
+    Gauges3 = simplify_mapped(Gauges2, true),
+    Gauges3.
 
 get_hist() ->
     imetrics_hist:get_all().
@@ -347,9 +331,6 @@ clean_checkpoints() ->
     
 %% ---
 
-mapped_id(Name, Key) when is_binary(Name), is_binary(Key) ->
-    {Name, Key}.
-
 call_metrics_fun(Fun) ->
     try
         Fun()
@@ -369,26 +350,67 @@ get_unmapped(T) ->
 
 get_mapped(T) ->
     MappedDict = ets:foldl(
-                   fun({{Name, Key}, Value}, MappedDict0) ->
+                   fun({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key('_multigauge', Tags) ->
                            Value2 = if is_function(Value) -> call_metrics_fun(Value);
                                        true -> Value
                                     end,
-                           if Key =:= <<"$dim">> ->
-                                  %% always ensure the special $dim field is the first in the list
-                                  imetrics_utils:orddict_prepend_list(Name, [{Key, Value2}], MappedDict0);
-                              true ->
-                                  orddict:append_list(Name, [{Key, Value2}], MappedDict0)
-                           end;
-                      ({Name, Value}, MappedDict0) when is_function(Value) ->
-                           % multigauge
+
+                           % if a dimension has been set on a mapped counter/gauge, rename 'map_key' to what that dimension is
+                           % this is for backwards compatibility, the suggested path is to set your tags yourself and not use a mapped counter
+                           Tags3 = case {maps:find(map_key, Tags), ets:lookup(imetrics_map_keys, Name)} of
+                                {{ok, _}, [{Name, Dimension}]} ->
+                                    {MapKeyValue, Tags2} = maps:take(map_key, Tags),
+                                    Tags2#{ binary_to_atom(Dimension) => MapKeyValue };
+                                _ ->
+                                    Tags
+                                end,
+                           Tags4 = maps:remove(name, Tags3),
+                           orddict:append_list(Name, [{Tags4, Value2}], MappedDict0);
+                      ({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) when is_function(Value) ->
+                           % multigauge support
+                           [{Name, Dimension}] = ets:lookup(imetrics_map_keys, Name),
                            List = call_metrics_fun(Value),
-                           List2 = lists:map(fun({K0, V0}) -> {imetrics_utils:bin(K0), V0} end, List),
+                           List2 = lists:map(fun({K0, V0}) -> {#{ binary_to_atom(Dimension) => imetrics_utils:bin(K0)}, V0} end, List),
                            orddict:append_list(Name, List2, MappedDict0);
                       (_, MappedDict0) ->
                            MappedDict0
                    end, orddict:new(),
                    T),
     orddict:to_list(MappedDict).
+
+% takes metrics that have a single entry with an empty map and simplify them to K/V pairs
+simplify_unmapped(List) ->
+    lists:reverse(lists:foldl(fun ({Name, MetricPoints}, Acc) -> 
+            case MetricPoints of
+                [{Tags, Value}] when map_size(Tags) == 0 ->
+                    [{Name, Value}|Acc];
+                _ ->
+                    [{Name, MetricPoints}|Acc]
+            end
+        end, [], List)).
+
+% simplifies mapped metrics to only include a single key, for backwards compatibility (like imetrics:get/0)
+simplify_mapped(List) ->
+    simplify_mapped(List, false).
+simplify_mapped(List, IncludeDim) ->
+    lists:reverse(lists:foldl(fun ({Name, MetricPoints}, Acc) -> 
+            if is_list(MetricPoints) ->
+                    MapKeys = ets:lookup(imetrics_map_keys, Name),
+                    MapKeyBin = proplists:get_value(Name, MapKeys, <<"map_key">>),
+                    MapKeyAtom = binary_to_atom(MapKeyBin),
+                    FoldAccStart2 = case IncludeDim of
+                        true -> [{<<"$dim">>, MapKeyBin}];
+                        false -> []
+                    end,
+                    MetricPoints2 = lists:sort(lists:foldl(fun ({Tags, Value}, Acc2) -> 
+                            MapValue = maps:get(MapKeyAtom, Tags),
+                            [{MapValue, Value}|Acc2]
+                        end, FoldAccStart2, MetricPoints)),
+                    [{Name, MetricPoints2}|Acc];
+                true ->
+                    [{Name, MetricPoints}|Acc]
+            end
+        end, [], List)).
 
 tock_s_name_match(Ticks, Name) ->
     I = maps:iterator(Ticks),

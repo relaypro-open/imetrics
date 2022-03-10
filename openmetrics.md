@@ -21,6 +21,10 @@
   - [ ] `UNIT` metric descriptor
   - [ ] `HELP` metric descriptor
   - [ ] Tags on a per-metric level
+    - [x] `counter`
+    - [x] `gauge` / `multigauge`
+    - [ ] `stats`
+    - [ ] `histogram`s
   - [ ] New metric types?
     - [ ] `summary` (as a way to surface precomputed percentiles from histograms)
     - [ ] `histogram` and `gaugehistogram`

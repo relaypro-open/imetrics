@@ -13,7 +13,9 @@ bin(V) when is_integer(V) ->
 bin(T) when is_tuple(T) andalso tuple_size(T) =< 8 ->
     L = tuple_to_list(T),
     L2 = [ bin(X) || X <- L ],
-    binary_join(L2, application:get_env(imetrics, separator, <<"_">>)).
+    binary_join(L2, application:get_env(imetrics, separator, <<"_">>));
+bin(M) when is_map(M) ->
+    maps:map(fun (_Key, Value) -> bin(Value) end, M).
 
 -spec binary_join([binary()], binary()) -> binary().
 binary_join([], _Sep) ->
