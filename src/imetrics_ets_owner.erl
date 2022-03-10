@@ -28,9 +28,8 @@ start_link() ->
 
 init([]) ->
     ets:new(imetrics_counters, [public, named_table]),
-    ets:new(imetrics_mapped_counters, [public, named_table]),
     ets:new(imetrics_gauges, [public, named_table]),
-    ets:new(imetrics_mapped_gauges, [public, named_table]),
+    ets:new(imetrics_map_keys, [public, named_table]),
     ets:new(imetrics_stats, [public, named_table]),
     ets:new(imetrics_data_checkpoint, [public, named_table]),
     ets:new(imetrics_hist, [public, named_table]),

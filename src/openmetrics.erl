@@ -42,16 +42,12 @@ deliver_data(Req, _Type = types, Data) ->
     Func = fun deliver_metricfamily/2,
     lists:foreach(fun(Value) -> Func(Req, Value) end, Data).
 
-deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
+deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
     ShouldPrintMetric =
         case {Type, application:get_env(imetrics, strict_openmetrics_compat, false)} of
             {counter, _} ->
                 cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
-            {mapped_counter, _} ->
-                cowboy_req:stream_body(["# TYPE ", Name, " counter\n"], nofin, Req);
             {gauge, _} ->
-                cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
-            {mapped_gauge, _} ->
                 cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
             {_, false} ->
                 cowboy_req:stream_body(["# TYPE ", Name, " unknown\n"], nofin, Req);
@@ -64,27 +60,49 @@ deliver_metricfamily(Req, {Type, {Name, MetricValue}}) ->
             cowboy_req:stream_body([Name, " ", VStr, "\n"], nofin, Req);
         {ok, Map} when is_map(Map) ->
             MappedValues = maps:to_list(Map),
-            Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
-            deliver_mapped_metric(Req, Name, Dim, MappedValues);
+            deliver_legacy_mapped_metric(Req, Name, MappedValues);
         {ok, MappedValues} when is_list(MappedValues) ->
-            Dim = proplists:get_value(<<"$dim">>, MappedValues, <<"map_key">>),
-            deliver_mapped_metric(Req, Name, Dim, MappedValues);
+            case MappedValues of
+                [{Tags, _Value} | _] when is_map(Tags) ->
+                    deliver_mapped_metric(Req, Name, MappedValues);
+                _ ->
+                    deliver_legacy_mapped_metric(Req, Name, MappedValues)
+            end;
         {not_ok, _} ->
             ok
     end.
 
-deliver_mapped_metric(Req, Name, Dim, [{Key, Value} | Tail]) ->
+deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
     case Key of
         <<"$dim">> ->
-            deliver_mapped_metric(Req, Name, Dim, Tail);
+            deliver_legacy_mapped_metric(Req, Name, Tail);
         _ ->
             cowboy_req:stream_body(
-                [<<Name/binary, "{">>, Dim, "=\"", Key, "\"} ", strnum(Value), "\n"], nofin, Req
+                [<<Name/binary, "{">>, <<"map_key">>, "=\"", Key, "\"} ", strnum(Value), "\n"], nofin, Req
             ),
-            deliver_mapped_metric(Req, Name, Dim, Tail)
+            deliver_legacy_mapped_metric(Req, Name, Tail)
     end;
-deliver_mapped_metric(_Req, _Name, _Dim, []) ->
+deliver_legacy_mapped_metric(_Req, _Name, []) ->
     ok.
+
+deliver_mapped_metric(Req, Name, [{Tags, Value} | Tail]) ->
+    TagString = create_tag_string(Tags),
+    cowboy_req:stream_body(
+        [Name, TagString, " ", strnum(Value), "\n"], nofin, Req
+    ),
+    deliver_mapped_metric(Req, Name, Tail);
+deliver_mapped_metric(_Req, _Name, []) ->
+    ok.
+
+create_tag_string(Tags) ->
+    TagPairs = lists:foldl(
+        fun({TagName, TagValue}, Acc) ->
+            [[atom_to_binary(TagName), "=\"", TagValue, "\""] | Acc]
+        end,
+        [],
+        maps:to_list(Tags)
+    ),
+    ["{", lists:join(",", lists:reverse(TagPairs)), "}"].
 
 strnum('NaN') -> "NaN";
 strnum(N) when is_integer(N) -> integer_to_list(N);

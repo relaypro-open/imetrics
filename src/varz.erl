@@ -19,10 +19,9 @@ get(Req) ->
         true ->
             handle(Req, fun() ->
                 [
-                    Metric
-                 || {Type, Metric} <- imetrics:get_with_types(),
-                    not ((Type =:= counter) or (Type =:= gauge) or (Type =:= mapped_counter) or
-                        (Type =:= mapped_gauge))
+                    {MetricName, MetricPoints}
+                 || {MetricName, {Type, MetricPoints}} <- imetrics:get_with_types(),
+                    not ((Type =:= counter) or (Type =:= gauge))
                 ]
             end)
     end.

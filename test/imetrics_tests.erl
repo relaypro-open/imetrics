@@ -77,8 +77,7 @@ dimension_test(_) ->
     imetrics:add_m(dimension_test2, key2),
     imetrics:set_counter_dimension(dimension_test2, dim2),
     [
-     ?_assertEqual([{<<"dimension_test1">>,[{<<"$dim">>,<<"dim1">>}]},
-                  {<<"dimension_test2">>,
+     ?_assertEqual([{<<"dimension_test2">>,
                    [{<<"$dim">>,<<"dim2">>},{<<"key2">>,1}]}], imetrics:get_counters())
     ].
 
@@ -136,6 +135,36 @@ get_test(_Fixture) ->
             <<"sum2">> => 100}, proplists:get_value(<<"stats">>, Data))
     ].
 
+%% get_with_types tests
+get_with_types_test_() ->
+    {setup,
+        fun start_get_with_types/0,
+        fun stop/1,
+        fun get_with_types_test/1}. 
+
+start_get_with_types() ->
+    F = start(),
+    imetrics:add(counter, #{ map => key }),
+    imetrics:add_m(mapped_counter, value),
+    imetrics:set_counter_dimension(mapped_counter, key),
+    imetrics:set_gauge(gauge, #{ map2 => key2 }, 1.5),
+    imetrics:set_gauge_m(mapped_gauge, value, 1.5),
+    imetrics:set_counter_dimension(mapped_gauge, key),
+    imetrics:set_multigauge(fn_gauge, code, fun() -> [{<<"200">>, 1}, {<<"404">>, 5}] end),
+    F.
+
+get_with_types_test(_Fixture) ->
+    Data = imetrics:get_with_types(),
+    [
+        ?_assertEqual({counter, [{#{ map => <<"key">> }, 1}]}, proplists:get_value(<<"counter">>, Data)),
+        ?_assertEqual({counter, [{#{key => <<"value">>}, 1}]},
+            proplists:get_value(<<"mapped_counter">>, Data)),
+        ?_assertEqual({gauge, [{#{ map2 => <<"key2">>}, 1.5}]}, proplists:get_value(<<"gauge">>, Data)),
+        ?_assertEqual({gauge, [{#{key => <<"value">>}, 1.5}]},
+            proplists:get_value(<<"mapped_gauge">>, Data)),
+        ?_assertEqual({gauge, [{#{ code => <<"200">>}, 1},{#{ code => <<"404">>}, 5}]}, proplists:get_value(<<"fn_gauge">>, Data))
+    ].
+
 %% http tests
 http_test_() ->
     {setup,
@@ -160,11 +189,11 @@ http_test_varz(#{port := Port}) ->
     {_Vsn, Code, _Friendly} = Status,
 
     Res = ["counter 1",
-        "counter_tuple 1",
         "counter:tuple:colon 1",
+        "counter_tuple 1",
+        "mapped_counter key:1",
         "fn_gauge 1.5",
         "gauge 1.5",
-        "mapped_counter key:1",
         "mapped_gauge key:1.5",
         "stats max:10 min:10 n:1 sum:10 sum2:100"],
     Res2 = string:join(Res, "\n") ++ "\n",
@@ -181,17 +210,17 @@ http_test_openmetrics(#{port := Port}) ->
 
     Res = [
         "# TYPE counter counter",
-        "counter 1",
-        "# TYPE counter_tuple counter",
-        "counter_tuple 1",
+        "counter{} 1",
         "# TYPE counter:tuple:colon counter",
-        "counter:tuple:colon 1",
-        "# TYPE fn_gauge gauge",
-        "fn_gauge 1.5",
-        "# TYPE gauge gauge",
-        "gauge 1.5",
+        "counter:tuple:colon{} 1",
+        "# TYPE counter_tuple counter",
+        "counter_tuple{} 1",
         "# TYPE mapped_counter counter",
         "mapped_counter{map_key=\"key\"} 1",
+        "# TYPE fn_gauge gauge",
+        "fn_gauge{} 1.5",
+        "# TYPE gauge gauge",
+        "gauge{} 1.5",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{map_key=\"key\"} 1.5",
         "# TYPE stats unknown",
@@ -232,17 +261,17 @@ http_test_openmetrics_strict(#{port := Port}) ->
 
     Res = [
         "# TYPE counter counter",
-        "counter 1",
-        "# TYPE counter_tuple counter",
-        "counter_tuple 1",
+        "counter{} 1",
         "# TYPE counter:tuple:colon counter",
-        "counter:tuple:colon 1",
-        "# TYPE fn_gauge gauge",
-        "fn_gauge 1.5",
-        "# TYPE gauge gauge",
-        "gauge 1.5",
+        "counter:tuple:colon{} 1",
+        "# TYPE counter_tuple counter",
+        "counter_tuple{} 1",
         "# TYPE mapped_counter counter",
         "mapped_counter{map_key=\"key\"} 1",
+        "# TYPE fn_gauge gauge",
+        "fn_gauge{} 1.5",
+        "# TYPE gauge gauge",
+        "gauge{} 1.5",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{map_key=\"key\"} 1.5",
         "# EOF"],

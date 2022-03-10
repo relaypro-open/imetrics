@@ -44,13 +44,13 @@ Counters are also nice because they do not hide local extrema when quantized.
 In other words, the general shape of the time series is not hidden by a large
 delta-time (low resolution data).
 
-imetrics also supports *mapped counters*, which allow you to bundle many
+imetrics also supports *tags* on counter metrics, which allow you to bundle many
 related counters under one named entry. When used in an http server, we can
 count the number of each HTTP response code.
 
 ```erlang
-imetrics:add_m(http_responses, "200"),
-imetrics:add_m(http_responses, "404").
+imetrics:add(http_responses, #{ code => "200" }),
+imetrics:add(http_responses, #{ code => "404" }).
 ```
 
 ### Gauges ###
@@ -61,11 +61,11 @@ A gauge is a number, any number. You are in charge of what value it's set to.
 imetrics:set_gauge(velocity, 50.5).
 ```
 
-And there are also *mapped gauges*.
+And there are also *tagged* gauges.
 
 ```erlang
-imetrics:set_gauge_m(cpu_load_avg, '1min', 0.1),
-imetrics:set_gauge_m(cpu_load_avg, '5min', 3.4).
+imetrics:set_gauge(cpu_load_avg, #{ granularity => '1min' }, 0.1),
+imetrics:set_gauge(cpu_load_avg, #{ granularity => '5min' }, 3.4).
 ```
 
 Often, a gauge is a calculation based on some counter over time. For example,
@@ -90,8 +90,8 @@ imetrics:set_stats(ievent_expiration_jobs, Stats2)
 ```
 
 ### Allowed types ###
-imetrics will normalize any Name and Key input to the add and set_gauge
-functions to a binary string. The Name and Key needs to match one of these
+imetrics will normalize any Name and Tag Value inputs to the add and set_gauge
+functions to a binary string. The Name and any Tag Values need to match one of these
 guards (See `imetrics:bin/1`):
 
 ```erlang
@@ -109,6 +109,53 @@ Retrieving data
 ---------------
 
 ### With Erlang ###
+
+The function `imetrics:get_with_types/0` will return a proplist containing all
+the metrics stored by imetrics with their tag dictionaries. Each metric will have
+a map of tag permutations, with the value corresponding to each tag permutation.
+
+```erlang
+> imetrics:get_with_types().
+[{<<"client_connections">>,{counter,[{#{},1}]}},
+ {<<"http_responses">>,
+  {counter,[{#{code => <<"404">>},1},
+            {#{code => <<"200">>},1}]}},
+ {<<"cpu_load_avg">>,
+  {gauge,[{#{granularity => <<"1min">>},0.1},
+          {#{granularity => <<"5min">>},3.4}]}},
+ {<<"velocity">>,{gauge,[{#{},50.5}]}}]
+```
+
+### With HTTP ###
+imetrics starts an HTTP server that returns a plaintext representation of all the
+metrics compatible with the [OpenMetrics standard.](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md)
+The URI for accessing this data is `/metrics`.
+
+```
+$ curl localhost:8085/metrics
+# TYPE client_connections counter
+client_connections{} 1
+# TYPE http_responses counter
+http_responses{code="404"} 1
+http_responses{code="200"} 1
+# TYPE cpu_load_avg gauge
+cpu_load_avg{granularity="1min"} 0.1
+cpu_load_avg{granularity="5min"} 3.4
+# TYPE velocity gauge
+velocity{} 50.5
+# EOF
+```
+
+## Legacy Behavior ##
+
+For backwards compatibility with previous versions of imetrics, two older interfaces
+still work, but they don't support all features. Namely, tagged metrics are unsupported.
+(Only the legacy "mapped" metrics, which can store one tag at a time, are supported.
+The APIs to create these "mapped" metrics are: `imetrics:add_m/3`, `imetrics:set_gauge_m/3`,
+`imetrics:update_gauge_m/3`, and `imetrics:update_counter_dimension/2`.) Use of these
+interfaces is strongly discouraged in favor of the more flexible tagging interface.
+### With Erlang (Legacy) ###
+
 The function `imetrics:get/0` will return a proplist containing all the metrics
 stored by imetrics. Un-mapped metrics have the number value in pos 2 of each
 entry. Mapped metrics have a nested proplist containing the metrics for each
@@ -124,28 +171,7 @@ associated key.
 
 All the metric names and mapping keys are normalized as binaries.
 
-### With HTTP ###
-imetrics starts an HTTP server that returns a plaintext representation of all the
-metrics compatible with the [OpenMetrics standard.](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md)
-The URI for accessing this data is `/metrics`.
-
-```
-$ curl localhost:8085/metrics
-# TYPE client_connections counter
-client_connections 1
-# TYPE velocity gauge
-velocity 50.5
-# TYPE http_responses counter
-http_responses{map_key="200"} 1
-http_responses{map_key="404"} 1
-# TYPE cpu_load_avg gauge
-cpu_load_avg{map_key="1min"} 0.1
-cpu_load_avg{map_key="5min"} 3.4
-# EOF
-```
 ### With HTTP (Legacy) ###
-
-> This section is preserved for backwards compatability.
 
 imetrics starts a very simple HTTP server that returns an easily parseable
 plaintext representation of all the metrics. The URI for accessing this data
