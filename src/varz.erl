@@ -161,11 +161,13 @@ deliver_data(Req, Data) ->
                 VStr = strnum(Value),
                 cowboy_req:stream_body([<<Name/binary, " ">>, VStr, "\n"], nofin, Req);
             ({Name, Map}) when is_map(Map) ->
+                Dim = serialize_dim_if_exists(Name),
                 MIo = serialize_proplist(maps:to_list(Map)),
-                cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req);
+                cowboy_req:stream_body([<<Name/binary, " ">>, Dim, MIo, "\n"], nofin, Req);
             ({Name, MappedValues}) when is_list(MappedValues) ->
+                Dim = serialize_dim_if_exists(Name),
                 MIo = serialize_proplist(MappedValues),
-                cowboy_req:stream_body([<<Name/binary, " ">>, MIo, "\n"], nofin, Req)
+                cowboy_req:stream_body([<<Name/binary, " ">>, Dim, MIo, "\n"], nofin, Req)
         end,
         Data
     ).
@@ -182,6 +184,13 @@ serialize_proplist(List) ->
         List
     ),
     string:join(MIo, " ").
+
+serialize_dim_if_exists(Name) ->
+    Results = ets:lookup(imetrics_map_keys, Name),
+    case proplists:get_value(Name, Results) of
+        undefined -> "";
+        Str -> ["$dim:", Str, " "]
+    end.
 
 strnum('NaN') -> "NaN";
 strnum(N) when is_integer(N) -> integer_to_list(N);
