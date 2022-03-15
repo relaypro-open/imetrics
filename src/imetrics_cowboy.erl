@@ -20,9 +20,12 @@ metrics_callback(Metrics) ->
     },
     NewTags = maps:merge(SanitizedUserData, Tags),
 
-    case StatusCode >= 400 of
-        true -> imetrics:add(cowboy_error_responses_metric(), NewTags);
-        false -> false
+    case maps:get(reason, Metrics) of
+        normal -> ok;
+        switch_protocol -> ok;
+        Tuple when is_tuple(Tuple) ->
+            Reason = element(1, Tuple),
+            imetrics:add(cowboy_error_responses_metric(), NewTags#{ reason => imetrics_utils:bin(Reason) })
     end,
 
     imetrics:add(cowboy_responses_metric(), NewTags).

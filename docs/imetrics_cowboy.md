@@ -27,7 +27,10 @@ cowboy:start_clear(
 Once you've done this, the following counters will be automatically populated:
 
 -   `cowboy_responses` - the number of responses. Tagged with `code="{HTTP_STATUS_CODE}"`
--   `cowboy_error_responses` - the number of responses with an HTTP 4XX or 5XX error code. Tagged the same as above.
+-   `cowboy_error_responses` - the number of responses where the cowboy handler encountered an error. Tagged with:
+    -   `code="{HTTP_STATUS_CODE}"`
+    -   `reason="{REASON}"` where **REASON** is one of `[internal_error, socket_error, stream_error, connection_error, stop]`
+        [(see `cowboy_stream`'s `reason()` type)](https://ninenines.eu/docs/en/cowboy/2.8/manual/cowboy_stream/#_reason)
 
 ## Custom tags
 
