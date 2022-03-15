@@ -105,6 +105,20 @@ is_tuple(V) andalso tuple_size(V) =< 8
 Otherwise, the add and set_gauge functions will return
 `{error, {function_clause, check_inputs}}`.
 
+Automatic data collectors
+-------------------------
+
+imetrics also includes adapters for common Erlang modules to enable collection of
+certain metrics automatically. Further documentation for these modules is available
+below:
+
+- **imetrics_cowboy** - An imetrics adapter that collects information about Cowboy response handlers
+  and can also annotate metrics with custom user data [_(docs)_](docs/imetrics_cowboy.md)
+- **imetrics_cowboy_stream_h** - An older adapter for Cowboy that doesn't collect any custom user data
+  _(docs TBD)_
+- **imetrics_lager_backend** - A [Lager](https://github.com/erlang-lager/lager) backend that counts log
+  events segmented by log level _(docs TBD)_
+
 Retrieving data
 ---------------
 
