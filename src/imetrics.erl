@@ -402,11 +402,16 @@ simplify_mapped(List, IncludeDim) ->
                         true -> [{<<"$dim">>, MapKeyBin}];
                         false -> []
                     end,
-                    MetricPoints2 = lists:sort(lists:foldl(fun ({Tags, Value}, Acc2) -> 
-                            MapValue = maps:get(MapKeyAtom, Tags),
-                            [{MapValue, Value}|Acc2]
+                    MetricPoints2 = lists:sort(lists:foldl(fun ({Tags, Value}, Acc2) ->
+                            case maps:get(MapKeyAtom, Tags, undefined) of
+                                undefined -> Acc2;
+                                MapValue -> [{MapValue, Value}|Acc2]
+                            end
                         end, FoldAccStart2, MetricPoints)),
-                    [{Name, MetricPoints2}|Acc];
+                    case MetricPoints2 of
+                        [] -> Acc;
+                        _ -> [{Name, MetricPoints2}|Acc]
+                    end;
                 true ->
                     [{Name, MetricPoints}|Acc]
             end
