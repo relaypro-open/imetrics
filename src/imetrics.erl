@@ -360,7 +360,7 @@ get_mapped(T) ->
                            Tags3 = case {maps:find(map_key, Tags), ets:lookup(imetrics_map_keys, Name)} of
                                 {{ok, _}, [{Name, Dimension}]} ->
                                     {MapKeyValue, Tags2} = maps:take(map_key, Tags),
-                                    Tags2#{ binary_to_atom(Dimension) => MapKeyValue };
+                                    Tags2#{ list_to_atom(binary_to_list(Dimension)) => MapKeyValue };
                                 _ ->
                                     Tags
                                 end,
@@ -370,7 +370,7 @@ get_mapped(T) ->
                            % multigauge support
                            [{Name, Dimension}] = ets:lookup(imetrics_map_keys, Name),
                            List = call_metrics_fun(Value),
-                           List2 = lists:map(fun({K0, V0}) -> {#{ binary_to_atom(Dimension) => imetrics_utils:bin(K0)}, V0} end, List),
+                           List2 = lists:map(fun({K0, V0}) -> {#{ list_to_atom(binary_to_list(Dimension)) => imetrics_utils:bin(K0)}, V0} end, List),
                            orddict:append_list(Name, List2, MappedDict0);
                       (_, MappedDict0) ->
                            MappedDict0
@@ -397,7 +397,7 @@ simplify_mapped(List, IncludeDim) ->
             if is_list(MetricPoints) ->
                     MapKeys = ets:lookup(imetrics_map_keys, Name),
                     MapKeyBin = proplists:get_value(Name, MapKeys, <<"map_key">>),
-                    MapKeyAtom = binary_to_atom(MapKeyBin),
+                    MapKeyAtom = list_to_atom(binary_to_list(MapKeyBin)),
                     FoldAccStart2 = case IncludeDim of
                         true -> [{<<"$dim">>, MapKeyBin}];
                         false -> []

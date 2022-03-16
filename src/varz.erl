@@ -6,7 +6,7 @@
 % cowboy functions:
 init(Req, State) ->
     [<<"varz">>, FuncNameBinary] = string:split(cowboy_req:binding(func, Req), ":"),
-    FuncName = binary_to_atom(FuncNameBinary),
+    FuncName = list_to_atom(binary_to_list(FuncNameBinary)),
     {ok, Req1} = ?MODULE:FuncName(Req),
     {ok, Req1, State}.
 terminate(_Reason, _Req, _State) ->
@@ -90,7 +90,7 @@ qs_atom_val(Name, QS, Default) ->
         undefined ->
             Default;
         X ->
-            binary_to_atom(X)
+            list_to_atom(binary_to_list(X))
     end.
 
 qs_str_val(Name, QS, Default) ->
