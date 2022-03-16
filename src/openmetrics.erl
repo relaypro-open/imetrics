@@ -97,7 +97,7 @@ deliver_mapped_metric(_Req, _Name, []) ->
 create_tag_string(Tags) ->
     TagPairs = lists:foldl(
         fun({TagName, TagValue}, Acc) ->
-            [[atom_to_binary(TagName), "=\"", TagValue, "\""] | Acc]
+            [[list_to_binary(atom_to_list(TagName)), "=\"", TagValue, "\""] | Acc]
         end,
         [],
         maps:to_list(Tags)

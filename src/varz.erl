@@ -85,7 +85,7 @@ qs_e_val(QS) ->
     end.
 
 qs_atom_val(Name, QS, Default) ->
-    Value = proplists:get_value(atom_to_binary(Name, latin1), QS),
+    Value = proplists:get_value(list_to_binary(atom_to_list(Name)), QS),
     case Value of
         undefined ->
             Default;
@@ -94,7 +94,7 @@ qs_atom_val(Name, QS, Default) ->
     end.
 
 qs_str_val(Name, QS, Default) ->
-    Value = proplists:get_value(atom_to_binary(Name, latin1), QS),
+    Value = proplists:get_value(list_to_binary(atom_to_list(Name)), QS),
     case Value of
         undefined ->
             Default;
