@@ -43,12 +43,21 @@ local_add(C) ->
     timer:sleep(100),
 
     % clean up
-    ok = icount:delocalize(C, "eunit").
+    ok = icount:delocalize(C, "eunit"),
+
+    %% sleep again to allow counter cleanup
+    timer:sleep(100),
+
+    %% counter should have been cleaned up after delocalizing
+    [] = icount:dump(C),
+
+    ok.
 
 local_cleanup(C) ->
     ok = icount:localize(C, "eunit"),
     [{"eunit", _}] = icount:dump(C),
-    #{localized := {#{"eunit" := MRef}, _}} = sys:get_state(C),
+    Pid = self(),
+    #{localized := {_, _, #{Pid := MRef}}} = sys:get_state(C),
     C ! {'DOWN', MRef, process, self(), []}, % fake it
     [] = icount:dump(C),
     ok.
