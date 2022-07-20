@@ -73,7 +73,7 @@ delocalize(SvrRef, UId) ->
     LocalizedIdxKey = {?MODULE, idx, UId},
     erase(LocalizedUIdKey),
     erase(LocalizedIdxKey),
-    gen_server:cast(SvrRef, {monitor, UId, undefined}),
+    gen_server:cast(SvrRef, {demonitor, UId, self()}),
     ok.
 
 %% @doc dump all counters to a nested proplist, sorted by recency
@@ -215,10 +215,10 @@ init(StartArgs=#{size := Size,
     CountersRef = counters:new(Size, Opts),
     Mem = maps:get(memory, counters:info(CountersRef)),
     {ok, StartArgs#{idx => #{},
-           mem => Mem,
-           num => 0,
-           ets => Ets,
-           localized => {#{}, #{}} % id => mref and mref => id
+                    mem => Mem,
+                    num => 0,
+                    ets => Ets,
+                    localized => {#{}, #{}, #{}} % id => count of mrefs currently in use, mref => id, pid => mref
                    }
     }.
 
@@ -268,25 +268,20 @@ handle_call(get_ets, _From, State=#{ets := Ets}) ->
 handle_call(get_idx, _From, State=#{idx := Idx}) ->
     {reply, Idx, State}.
 
-handle_cast({monitor, UId, undefined}, State=#{localized := {IMap, RMap}}) ->
-    case maps:get(UId, IMap, undefined) of
+handle_cast({monitor, UId, Pid}, State=#{localized := {IMap, RMap, PidMrefMap}}) ->
+    MRef = erlang:monitor(process, Pid),
+    MRefCount = maps:get(UId, IMap, 0),
+    IMap2 = IMap#{UId => MRefCount+1},     %% increment the ref counter for this id
+    RMap2 = RMap#{MRef => UId},
+    PidMrefMap2 = PidMrefMap#{Pid => MRef},
+    {noreply, State#{localized => {IMap2, RMap2, PidMrefMap2}}};
+handle_cast({demonitor, UId, Pid}, State=#{localized := {_IMap, _RMap, PidMrefMap}}) ->
+    case maps:get(Pid, PidMrefMap, undefined) of
         undefined ->
             {noreply, State};
         MRef ->
-            IMap2 = maps:without([UId], IMap),
-            RMap2 = maps:without([MRef], RMap),
-            {noreply, State#{localized => {IMap2, RMap2}}}
-    end;
-handle_cast({monitor, UId, Pid}, State=#{localized := {IMap, RMap}}) ->
-    case maps:get(UId, IMap, undefined) of
-        undefined ->
-            MRef = erlang:monitor(process, Pid),
-            IMap2 = IMap#{UId => MRef},
-            RMap2 = RMap#{MRef => UId},
-            {noreply, State#{localized => {IMap2, RMap2}}};
-        _ ->
-            % already monitored
-            {noreply, State}
+            erlang:demonitor(MRef),
+            {noreply, remove_process(UId, MRef, Pid, State)}
     end;
 handle_cast({remove_counters_ref, UId}, State=#{num := N, ets := Ets}) ->
     N2 = case ets:lookup(Ets, UId) of
@@ -321,18 +316,30 @@ handle_cast(gc, State=#{mem := Mem,
 handle_info({sleep, N}, State) ->
     do_sleep(N),
     {noreply, State};
-handle_info({'DOWN', MRef, process, _DownPid, _Info}, State=#{localized := {IMap, RMap}}) ->
+handle_info({'DOWN', MRef, process, DownPid, _Info}, State=#{localized := {_IMap, RMap, _PidMrefMap}}) ->
     case maps:get(MRef, RMap, undefined) of
         undefined ->
             {noreply, State};
         UId ->
-            IMap2 = maps:without([UId], IMap),
-            RMap2 = maps:without([MRef], RMap),
-            remove(self(), UId), % gen_server:cast
-            {noreply, State#{localized => {IMap2, RMap2}}}
+            {noreply, remove_process(UId, MRef, DownPid, State)}
     end;
 handle_info(_Info, State) ->
     {noreply, State}.
+
+%% untracks the provided mref/pid and decrements number of tracked processes, cleaning up counters if zero
+remove_process(UId, MRef, Pid, State=#{localized := {IMap, RMap, PidMrefMap}}) ->
+    NMRefCount = maps:get(UId, IMap, 0) - 1,
+    IMap2 = case NMRefCount of
+        C when C =< 0 ->
+            %% shut it down
+            remove(self(), UId), % gen_server:cast
+            maps:without([UId], IMap);
+        C ->
+            IMap#{UId => C}
+    end,
+    RMap2 = maps:without([MRef], RMap),
+    PidMrefMap2 = maps:without([Pid], PidMrefMap),
+    State#{localized => {IMap2, RMap2, PidMrefMap2}}.
 
 terminate(_Reason, _State) ->
     ok.
