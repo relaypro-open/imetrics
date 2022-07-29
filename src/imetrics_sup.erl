@@ -27,6 +27,12 @@ init([]) ->
             shutdown => 5000,
             type => worker,
             modules => [imetrics_ets_owner]},
+    ActorsGuildSup = #{id => imetrics_actors_guild_sup,
+                       start => {imetrics_actors_guild_sup, start_link, []},
+                       restart => permanent,
+                       shutdown => infinity,
+                       type => supervisor,
+                       modules => [imetrics_actors_guild_sup]},
     HttpSpecs = case application:get_env(imetrics, require_http_server_on_startup) of
                     {ok, false} ->
                         [];
@@ -38,7 +44,7 @@ init([]) ->
                           type => worker,
                           modules => [imetrics_http_server]}]
                 end,
-    ChildSpecs = [EtsOwner] ++ HttpSpecs,
+    ChildSpecs = [EtsOwner, ActorsGuildSup] ++ HttpSpecs,
     {ok, {SupFlags, ChildSpecs}}.
 
 slo_info() ->
