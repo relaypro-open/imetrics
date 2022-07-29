@@ -72,6 +72,12 @@ Often, a gauge is a calculation based on some counter over time. For example,
 consider tracking `miles_driven` instead of `velocity`. You may find that your
 metrics are more flexible down the road.
 
+### Actor-based Gauges ###
+
+`imetrics` provides a module to help manage the collection of a gauge metric that occurs
+across a set of Erlang processes. Please see the `imetrics_actors` module for documentation
+and an example.
+
 ### Stats ###
 
 Stats is a map tracking stats about a collection of values without
