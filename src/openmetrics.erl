@@ -20,19 +20,12 @@ get(Req) ->
     {ok, cowboy_req:stream_trailers(#{}, Req3)}.
 
 handle(Type, Req, DataFun) ->
-    try
-        case DataFun() of
-            [] ->
-                {ok, Req};
-            Data ->
-                ok = deliver_data(Req, Type, Data),
-                {ok, Req}
-        end
-    catch
-        Class:Reason:Stacktrace ->
-            io:format("exception ~p:~p~n", [Class, Reason]),
-            io:format("~p~n", [Stacktrace]),
-            ok
+    case DataFun() of
+        [] ->
+            {ok, Req};
+        Data ->
+            ok = deliver_data(Req, Type, Data),
+            {ok, Req}
     end.
 
 % The _Type parameter here allows multiple versions of the deliver_data/3 function
