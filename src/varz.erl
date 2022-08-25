@@ -173,13 +173,13 @@ deliver_data(Req, Data) ->
     ).
 
 serialize_proplist(List) ->
-    MIo = lists:map(
+    MIo = lists:filtermap(
         fun
-            ({Key = <<"$dim">>, VStr}) ->
-                [Key, ":", VStr];
+            ({_Key = <<"$dim">>, _VStr}) ->
+                false;
             ({Key, Value}) when is_number(Value); Value =:= 'NaN' ->
                 VStr = strnum(Value),
-                [Key, ":", VStr]
+                {true, [Key, ":", VStr]}
         end,
         List
     ),
