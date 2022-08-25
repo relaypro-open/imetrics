@@ -176,14 +176,21 @@ serialize_proplist(List) ->
     MIo = lists:map(
         fun
             ({Key = <<"$dim">>, VStr}) ->
-                [Key, ":", VStr];
+                skip_dim;
             ({Key, Value}) when is_number(Value); Value =:= 'NaN' ->
                 VStr = strnum(Value),
                 [Key, ":", VStr]
         end,
         List
     ),
-    string:join(MIo, " ").
+    MIo2 = lists:filter(
+        fun
+            (skip_dim) -> false;
+            (_) -> true
+        end,
+        MIo
+    ),
+    string:join(MIo2, " ").
 
 serialize_dim_if_exists(Name) ->
     Results = ets:lookup(imetrics_map_keys, Name),
