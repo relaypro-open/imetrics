@@ -331,16 +331,16 @@ clean_checkpoints() ->
     
 %% ---
 
-call_metrics_fun(Fun) ->
+call_metrics_fun(Fun, Default) ->
     try
         Fun()
     catch _:_ ->
-              -1
+              Default
     end.
 
 get_unmapped(T) ->
     Acc = ets:foldl(fun({Name, Value}, Acc0) ->
-                Value2 = if is_function(Value) -> call_metrics_fun(Value);
+                Value2 = if is_function(Value) -> call_metrics_fun(Value, -1);
                     true -> Value
                 end,
                 [{Name, Value2}|Acc0]
@@ -351,7 +351,7 @@ get_unmapped(T) ->
 get_mapped(T) ->
     MappedDict = ets:foldl(
                    fun({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key('_multigauge', Tags) ->
-                           Value2 = if is_function(Value) -> call_metrics_fun(Value);
+                           Value2 = if is_function(Value) -> call_metrics_fun(Value, -1);
                                        true -> Value
                                     end,
 
@@ -369,7 +369,7 @@ get_mapped(T) ->
                       ({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) when is_function(Value) ->
                            % multigauge support
                            [{Name, Dimension}] = ets:lookup(imetrics_map_keys, Name),
-                           List = call_metrics_fun(Value),
+                           List = call_metrics_fun(Value, []),
                            List2 = lists:map(fun({K0, V0}) -> {#{ list_to_atom(binary_to_list(Dimension)) => imetrics_utils:bin(K0)}, V0} end, List),
                            orddict:append_list(Name, List2, MappedDict0);
                       (_, MappedDict0) ->
