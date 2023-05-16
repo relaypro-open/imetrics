@@ -13,12 +13,25 @@ metric_fun() ->
     Table = case (timer:now_diff(erlang:timestamp(), LastUpdateTime) div 1000) > timer:seconds(55) of
         true ->
             [
-                [{_MaxMQueuePid, MaxMQueueLen, _}|_],
-                [{_MaxMemoryPid, MaxMemory, _}|_]
+                [{MaxMQueuePid, MaxMQueueLen, _}|_],
+                [{MaxMemoryPid, MaxMemory, _}|_]
             ] = proc_count([
                 message_queue_len,
                 memory
             ], 1),
+
+            % if the memory is > 512MB, log the PID to console
+            case MaxMemory > 512000000 of
+                true -> logger:info("Max Memory PID: ~p", [MaxMemoryPid]);
+                false -> noop
+            end,
+
+            % if a process has more than 50 messages, log the PID
+            case MaxMQueueLen > 50 of
+                true -> logger:info("Max Message Queue PID: ~p", [MaxMQueuePid]);
+                false -> noop
+            end,
+
             Objects = [
                 {max_message_queue_len, MaxMQueueLen},
                 {max_memory, MaxMemory},
