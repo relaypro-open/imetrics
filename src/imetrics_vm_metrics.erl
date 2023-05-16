@@ -19,6 +19,19 @@ metric_fun() ->
                 message_queue_len,
                 memory
             ], 1),
+
+            % if the memory is > 512MB, log the PID to console
+            case MaxMemory > 512000000 of
+                true -> logger:info("Max Memory PID: ~p", [MaxMemoryPid]);
+                false -> noop
+            end,
+
+            % if a process has more than 50 messages, log the PID
+            case MaxMQueueLen > 50 of
+                true -> logger:info("Max Message Queue PID: ~p", [MaxMQueuePid]);
+                false -> noop
+            end,
+
             Objects = [
                 {max_message_queue_len, MaxMQueueLen},
                 {max_memory, MaxMemory},
@@ -26,7 +39,6 @@ metric_fun() ->
                 {atom_limit, erlang:system_info(atom_limit)},
                 {last_update_time, erlang:timestamp()}
             ],
-            logger:info("Max Message Queue PID: ~p, Max Memory PID: ~p", [MaxMQueuePid, MaxMemoryPid]),
             ets:insert(imetrics_vm_metrics, Objects),
             Objects;
         false ->
