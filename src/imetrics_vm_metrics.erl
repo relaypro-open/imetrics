@@ -13,8 +13,8 @@ metric_fun() ->
     Table = case (timer:now_diff(erlang:timestamp(), LastUpdateTime) div 1000) > timer:seconds(55) of
         true ->
             [
-                [{_MaxMQueuePid, MaxMQueueLen, _}|_],
-                [{_MaxMemoryPid, MaxMemory, _}|_]
+                [{MaxMQueuePid, MaxMQueueLen, _}|_],
+                [{MaxMemoryPid, MaxMemory, _}|_]
             ] = proc_count([
                 message_queue_len,
                 memory
@@ -26,6 +26,7 @@ metric_fun() ->
                 {atom_limit, erlang:system_info(atom_limit)},
                 {last_update_time, erlang:timestamp()}
             ],
+            logger:info("Max Message Queue PID: ~p, Max Memory PID: ~p", [MaxMQueuePid, MaxMemoryPid]),
             ets:insert(imetrics_vm_metrics, Objects),
             Objects;
         false ->
