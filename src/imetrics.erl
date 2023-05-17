@@ -2,7 +2,7 @@
 
 -include("../include/imetrics.hrl").
 
--export([add/1, add/2, add/3, add_m/2, add_m/3]).
+-export([add/1, add/2, add/3, set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5, add_m/2, add_m/3]).
 
 -export([set_gauge/2, set_gauge/3, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge/3, update_gauge_m/3]).
 
@@ -12,7 +12,7 @@
 
 -export([stats/1, set_stats/2]).
 
--export([get/0, get_with_types/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2, foldl_slo/3, get_slo/2]).
+-export([get/0, get_with_types/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2, foldl_slo/3, get_slo/2, get_exemplar/1]).
 
 -export([clean_checkpoints/0]).
 
@@ -54,6 +54,30 @@ add(Name, Tags, Value) ->
             true = is_integer(Value),
             TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
             ets:update_counter(imetrics_counters, TagsWithName, Value, {TagsWithName, 0})
+        end
+    ).
+
+set_exemplar(Name, EValue) ->
+    set_exemplar(Name, #{}, EValue, #{}, erlang:system_time(millisecond)/1000).
+set_exemplar(Name, Tags, EValue) when is_map(Tags) ->
+    set_exemplar(Name, Tags, EValue, #{}, erlang:system_time(millisecond)/1000);
+set_exemplar(Name, EValue, Labels) when is_map(Labels) ->
+    set_exemplar(Name, #{}, EValue, Labels, erlang:system_time(millisecond)/1000);
+set_exemplar(Name, EValue, Timestamp) when is_number(Timestamp) ->
+    set_exemplar(Name, #{}, EValue, #{}, Timestamp).
+set_exemplar(Name, Tags, EValue, Labels) when is_map(Tags), is_map(Labels) ->
+    set_exemplar(Name, Tags, EValue, Labels, erlang:system_time(millisecond)/1000);
+set_exemplar(Name, Tags, EValue, Timestamp) when is_map(Tags), is_number(Timestamp) ->
+    set_exemplar(Name, Tags, EValue, #{}, Timestamp);
+set_exemplar(Name, EValue, Labels, Timestamp) when is_map(Labels) ->
+    set_exemplar(Name, #{}, EValue, Labels, Timestamp).
+    
+set_exemplar(Name, Tags, EValue, Labels, Timestamp) ->
+    ?CATCH_KNOWN_EXC(
+        begin
+            BinList = imetrics_utils:bin(Labels),
+            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+            ets:insert(imetrics_exemplars, {TagsWithName, EValue, BinList, Timestamp})
         end
     ).
 
@@ -243,6 +267,14 @@ get_gauges() ->
     Gauges2 = simplify_unmapped(Gauges),
     Gauges3 = simplify_mapped(Gauges2, true),
     Gauges3.
+
+get_exemplar(Key) ->
+    case ets:lookup(imetrics_exemplars, Key) of
+        [] ->
+            undefined;
+        [{_Name, EValue, Labels, Timestamp}] ->
+            {EValue, Labels, Timestamp}
+        end.
 
 get_hist() ->
     imetrics_hist:get_all().

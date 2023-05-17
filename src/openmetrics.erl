@@ -50,7 +50,7 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
     case {ShouldPrintMetric, MetricValue} of
         {ok, Value} when is_number(Value) ->
             VStr = strnum(Value),
-            cowboy_req:stream_body([Name, " ", VStr, "\n"], nofin, Req);
+            cowboy_req:stream_body([Name, " ", VStr, get_exemplar_string(Name), "\n"], nofin, Req);
         {ok, Map} when is_map(Map) ->
             MappedValues = maps:to_list(Map),
             deliver_legacy_mapped_metric(Req, Name, MappedValues);
@@ -65,13 +65,36 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
             ok
     end.
 
+get_exemplar_string(Name) ->
+    get_exemplar_string(Name, #{}).
+get_exemplar_string(Name, Tags) ->
+    TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+    case imetrics:get_exemplar(TagsWithName) of
+        {EValue, Labels, Timestamp} ->
+            EStr = strnum(EValue),
+            TStr = strnum(Timestamp),
+            " # {" ++ create_label_string(Labels) ++ "} " ++ EStr ++ " " ++ TStr;
+        undefined ->
+            ""
+        end.
+
+create_label_string(Labels) ->
+    Result = maps:fold(fun(Label, Value, Acc) -> (", " ++ binary:bin_to_list(imetrics_utils:bin(Label)) ++ "=\"" ++ binary:bin_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
+    case length(Result) of
+        R when R < 3 ->
+            Result;
+        _ ->
+            [_, _ | Result2] = Result,
+            Result2
+        end.
+
 deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
     case Key of
         <<"$dim">> ->
             deliver_legacy_mapped_metric(Req, Name, Tail);
         _ ->
             cowboy_req:stream_body(
-                [<<Name/binary, "{">>, <<"map_key">>, "=\"", Key, "\"} ", strnum(Value), "\n"], nofin, Req
+                [<<Name/binary, "{">>, <<"map_key">>, "=\"", Key, "\"} ", strnum(Value), get_exemplar_string(Name), "\n"], nofin, Req
             ),
             deliver_legacy_mapped_metric(Req, Name, Tail)
     end;
@@ -81,7 +104,7 @@ deliver_legacy_mapped_metric(_Req, _Name, []) ->
 deliver_mapped_metric(Req, Name, [{Tags, Value} | Tail]) ->
     TagString = create_tag_string(Tags),
     cowboy_req:stream_body(
-        [Name, TagString, " ", strnum(Value), "\n"], nofin, Req
+        [Name, TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req
     ),
     deliver_mapped_metric(Req, Name, Tail);
 deliver_mapped_metric(_Req, _Name, []) ->

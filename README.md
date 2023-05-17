@@ -13,18 +13,15 @@ Dependencies
 
 Getting started
 ---------------
-Build, test, launch Erlang:
+Build, launch, and run Erlang and imetrics:
 
 ```
-rebar compile
-rebar eunit
-erl -pa ebin
+rebar3 shell
 ```
 
-Start the imetrics app and its dependencies:
-
-```erlang
-application:ensure_all_started(imetrics).
+To test imetrics:
+```
+rebar3 eunit
 ```
 
 Next, decide if you want a counter or a gauge.
@@ -93,6 +90,29 @@ Stats2 = imetrics_stats:update(ExecutionTime, Stats),
 ...
 % store the result in ets
 imetrics:set_stats(ievent_expiration_jobs, Stats2)
+```
+
+### Exemplars ###
+
+Exemplars are data points that can be added on top of a chart to provide information on a
+specific example of an event to augment the higher-level information offered by metrics more broadly.
+Exemplars are associated to a specific metric (both name and tag, where applicable), and contain, at minimum, a value.
+In addition, exemplars can attach labels and timestamps. Labels are user-defined fields of information, provided as quick reference to be displayed.
+A trace id is a common label, as it allows linking to detailed information about that trace.
+Labels are entered as a map, with label names as keys and label values as the values.
+The combined length of label names and values should not exceed 128 UTF-8 characters if intended for use with systems using the [OpenMetrics](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md#exemplars) specifications.
+Finally, exemplars can attach a timestamp. If left undefined, the timestamp will default to the current Erlang system time when `imetrics:set_exemplar` is called.
+Timestamps should be in seconds from Unix Epoch, and do not need to be integers.
+If exemplars are not updated between queries, additional copies of the exemplar will not be generated,
+so creating exemplars on infrequent events will not result in overpopulation of the data set.
+Additionally, whenever `set_exemplar` is called, the previous exemplar associated with the given
+name and tags will be overwritten, meaning only the most recently passed exemplar will be stored at any given time.
+`set_exemplar` does not check to see if the added exemplar is associated with any actual values, and will always return true.
+```erlang
+%Minimal set_exemplar
+imetrics:set_exemplar(http_responses, 1),
+%set_exemplar with all details included
+imetrics:set_exemplar(http_responses, #{ code => "404" }, 1, #{traceid => "oHg5SJYRHA0"}, 1684267027.342).
 ```
 
 ### Allowed types ###

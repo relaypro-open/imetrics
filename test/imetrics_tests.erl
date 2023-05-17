@@ -97,6 +97,50 @@ badarg_test(_Fixture) ->
         ?_assertEqual({error,{badarg,check_ets}}, imetrics:set_gauge_m(atom_gm, k, 1.5))
     ].
 
+%%exemplar tests
+exemplar_test_() ->
+    {setup,
+        fun start/0,
+        fun stop/1,
+        fun exemplar_test/1}. 
+
+exemplar_test(_Fixture) ->
+    ?_assertEqual(true, imetrics:set_exemplar(a, 1)),
+    ?_assertEqual(true, imetrics:set_exemplar(b, #{c => 1}, 2)),
+    ?_assertEqual(true, imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"})),
+    ?_assertEqual(true, imetrics:set_exemplar(f, 3, 946684800)),
+    ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k})),
+    ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 2}, 4, 978307200)),
+    ?_assertEqual(true, imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200)),
+    ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800)),
+    
+
+    imetrics:set_exemplar(a, 1),
+    imetrics:set_exemplar(b, #{c => 1}, 2),
+    imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"}),
+    imetrics:set_exemplar(f, 3, 946684800),
+    imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k}),
+    imetrics:set_exemplar(g, #{h => 2}, 4, 978307200),
+    imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200),
+    imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800),
+
+    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"a">>})),
+    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"b">>, c => <<"1">>})),
+    Test3Map = #{d => <<"2">>, e => <<"aa">>},
+    ?_assertMatch({2, Test3Map, _}, imetrics:get_exemplar(#{name => <<"c">>})),
+    ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{name => <<"f">>})),
+    Test5Map = #{j => <<"k">>},
+    ?_assertMatch({3, Test5Map, _}, imetrics:get_exemplar(#{name => <<"g">>, h => <<"1">>, i => <<"2">>})),
+    ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{name => <<"g">>, h => <<"2">>})),
+    Test7Map = #{j => <<"bb">>},
+    ?_assertMatch({5, Test7Map, 1009843200}, imetrics:get_exemplar(#{name => <<"i">>})),
+    Test8Map = #{m => <<"cc">>},
+    ?_assertMatch({6, Test8Map, 1577836800}, imetrics:get_exemplar(#{name => <<"k">>, l => <<"3">>})),
+    
+    ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000)),
+    imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000),
+    ?_assertMatch({0.1, #{}, 1893456000}, imetrics:get_exemplar(#{name => <<"k">>, l => <<"3">>})).
+
 
 %% get tests
 get_test_() ->
@@ -121,6 +165,14 @@ start_get() ->
     Stats = imetrics:stats(stats),
     Stats2 = imetrics_stats:update(10, Stats),
     imetrics:set_stats(stats, Stats2),
+
+    imetrics:add(counter2),
+    imetrics:add(tagged_counter2, #{tag2 => "val1"}),
+    imetrics:set_gauge(gauge2, 0.6),
+    imetrics:set_exemplar(counter2, 3, #{test_label => test_label_value}, 1262304000),
+    imetrics:set_exemplar(tagged_counter2, #{tag2 => "val1"}, 1.23, 946684800),
+    imetrics:set_exemplar(tagged_counter2, 100, 946684800),
+    imetrics:set_exemplar(gauge2, 0.57, 946684800),
     F.
 
 get_test(_Fixture) ->
@@ -191,11 +243,13 @@ http_test_varz(#{port := Port}) ->
     {_Vsn, Code, _Friendly} = Status,
 
     Res = ["counter 1",
+        "counter2 1",
         "counter:tuple:colon 1",
         "counter_tuple 1",
         "mapped_counter key:1",
         "fn_gauge 1.5",
         "gauge 1.5",
+        "gauge2 0.6",
         "mapped_gauge $dim:key value:1.5",
         "stats max:10 min:10 n:1 sum:10 sum2:100"],
     Res2 = string:join(Res, "\n") ++ "\n",
@@ -213,6 +267,8 @@ http_test_openmetrics(#{port := Port}) ->
     Res = [
         "# TYPE counter counter",
         "counter{} 1",
+        "# TYPE counter2 counter",
+        "counter2{} 1 # {test_label=\"test_label_value\"} 3 1262304000",
         "# TYPE counter:tuple:colon counter",
         "counter:tuple:colon{} 1",
         "# TYPE counter_tuple counter",
@@ -221,10 +277,14 @@ http_test_openmetrics(#{port := Port}) ->
         "mapped_counter{map_key=\"key\"} 1",
         "# TYPE tagged_counter counter",
         "tagged_counter{tag1=\"val1\"} 1",
+        "# TYPE tagged_counter2 counter",
+        "tagged_counter2{tag2=\"val1\"} 1 # {} 1.23 946684800",
         "# TYPE fn_gauge gauge",
         "fn_gauge{} 1.5",
         "# TYPE gauge gauge",
         "gauge{} 1.5",
+        "# TYPE gauge2 gauge",
+        "gauge2{} 0.6 # {} 0.57 946684800",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
         "# TYPE stats unknown",
@@ -266,6 +326,8 @@ http_test_openmetrics_strict(#{port := Port}) ->
     Res = [
         "# TYPE counter counter",
         "counter{} 1",
+        "# TYPE counter2 counter",
+        "counter2{} 1 # {test_label=\"test_label_value\"} 3 1262304000",
         "# TYPE counter:tuple:colon counter",
         "counter:tuple:colon{} 1",
         "# TYPE counter_tuple counter",
@@ -274,10 +336,14 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "mapped_counter{map_key=\"key\"} 1",
         "# TYPE tagged_counter counter",
         "tagged_counter{tag1=\"val1\"} 1",
+        "# TYPE tagged_counter2 counter",
+        "tagged_counter2{tag2=\"val1\"} 1 # {} 1.23 946684800",
         "# TYPE fn_gauge gauge",
         "fn_gauge{} 1.5",
         "# TYPE gauge gauge",
         "gauge{} 1.5",
+        "# TYPE gauge2 gauge",
+        "gauge2{} 0.6 # {} 0.57 946684800",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
         "# EOF"],
