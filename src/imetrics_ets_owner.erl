@@ -34,6 +34,7 @@ init([]) ->
     ets:new(imetrics_data_checkpoint, [public, named_table]),
     ets:new(imetrics_hist, [public, named_table]),
     ets:new(imetrics_vm_metrics, [public, named_table]),
+    ets:new(imetrics_exemplars, [public, named_table]),
 
     ExpireCheckpointIntervalHr = application:get_env(imetrics, expire_checkpoint_interval_hr, 1),
     timer:apply_interval(timer:hours(ExpireCheckpointIntervalHr),
