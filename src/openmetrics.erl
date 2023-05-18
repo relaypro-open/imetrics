@@ -68,7 +68,7 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
 get_exemplar_string(Name) ->
     get_exemplar_string(Name, #{}).
 get_exemplar_string(Name, Tags) ->
-    TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+    TagsWithName = imetrics_utils:bin(Tags#{ <<"__name__">> => Name }),
     case imetrics:get_exemplar(TagsWithName) of
         {EValue, Labels, Timestamp} ->
             EStr = strnum(EValue),

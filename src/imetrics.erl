@@ -76,7 +76,7 @@ set_exemplar(Name, Tags, EValue, Labels, Timestamp) ->
     ?CATCH_KNOWN_EXC(
         begin
             BinList = imetrics_utils:bin(Labels),
-            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+            TagsWithName = imetrics_utils:bin(Tags#{ <<"__name__">> => Name }),
             ets:insert(imetrics_exemplars, {TagsWithName, EValue, BinList, Timestamp})
         end
     ).

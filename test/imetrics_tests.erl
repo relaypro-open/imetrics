@@ -123,23 +123,28 @@ exemplar_test(_Fixture) ->
     imetrics:set_exemplar(g, #{h => 2}, 4, 978307200),
     imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200),
     imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800),
+    imetrics:set_exemplar(l, #{name => "test1"}, 1),
+    imetrics:set_exemplar(l, #{name => "test2"}, 2),
 
-    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"a">>})),
-    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"b">>, c => <<"1">>})),
+    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{<<"__name__">> => <<"a">>})),
+    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{<<"__name__">> => <<"b">>, c => <<"1">>})),
     Test3Map = #{d => <<"2">>, e => <<"aa">>},
-    ?_assertMatch({2, Test3Map, _}, imetrics:get_exemplar(#{name => <<"c">>})),
-    ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{name => <<"f">>})),
+    ?_assertMatch({2, Test3Map, _}, imetrics:get_exemplar(#{<<"__name__">> => <<"c">>})),
+    ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{<<"__name__">> => <<"f">>})),
     Test5Map = #{j => <<"k">>},
-    ?_assertMatch({3, Test5Map, _}, imetrics:get_exemplar(#{name => <<"g">>, h => <<"1">>, i => <<"2">>})),
-    ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{name => <<"g">>, h => <<"2">>})),
+    ?_assertMatch({3, Test5Map, _}, imetrics:get_exemplar(#{<<"__name__">> => <<"g">>, h => <<"1">>, i => <<"2">>})),
+    ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{<<"__name__">> => <<"g">>, h => <<"2">>})),
     Test7Map = #{j => <<"bb">>},
-    ?_assertMatch({5, Test7Map, 1009843200}, imetrics:get_exemplar(#{name => <<"i">>})),
+    ?_assertMatch({5, Test7Map, 1009843200}, imetrics:get_exemplar(#{<<"__name__">> => <<"i">>})),
     Test8Map = #{m => <<"cc">>},
-    ?_assertMatch({6, Test8Map, 1577836800}, imetrics:get_exemplar(#{name => <<"k">>, l => <<"3">>})),
+    ?_assertMatch({6, Test8Map, 1577836800}, imetrics:get_exemplar(#{<<"__name__">> => <<"k">>, l => <<"3">>})),
     
     ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000)),
     imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000),
-    ?_assertMatch({0.1, #{}, 1893456000}, imetrics:get_exemplar(#{name => <<"k">>, l => <<"3">>})).
+    ?_assertMatch({0.1, #{}, 1893456000}, imetrics:get_exemplar(#{<<"__name__">> => <<"k">>, l => <<"3">>})),
+
+    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"test1">>, <<"__name__">> => <<"l">>})),
+    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"test2">>, <<"__name__">> => <<"l">>})).
 
 
 %% get tests
