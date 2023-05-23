@@ -174,10 +174,10 @@ The URI for accessing this data is `/metrics`.
 ```
 $ curl localhost:8085/metrics
 # TYPE client_connections counter
-client_connections{} 1
+client_connections_total{} 1
 # TYPE http_responses counter
-http_responses{code="404"} 1
-http_responses{code="200"} 1
+http_responses_total{code="404"} 1
+http_responses_total{code="200"} 1
 # TYPE cpu_load_avg gauge
 cpu_load_avg{granularity="1min"} 0.1
 cpu_load_avg{granularity="5min"} 3.4
