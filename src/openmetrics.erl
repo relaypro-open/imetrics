@@ -101,10 +101,10 @@ deliver_legacy_mapped_metric(_Req, _Name, []) ->
 
 deliver_mapped_metric(Req, Type, Name, [{Tags, Value} | Tail]) ->
     TagString = create_tag_string(Tags),
-    case Type of
-        counter ->
+    case {Type, application:get_env(imetrics, openmetrics_exemplar_compat, false)} of
+        {counter, true} ->
             cowboy_req:stream_body([Name, "_total", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
-        _ ->
+        {_, _} ->
             cowboy_req:stream_body([Name, TagString, " ", strnum(Value), "\n"], nofin, Req)
         end,
     
