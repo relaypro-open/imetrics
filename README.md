@@ -96,7 +96,7 @@ imetrics:set_stats(ievent_expiration_jobs, Stats2)
 
 Exemplars are data points that can be added on top of a chart to provide information on a
 specific example of an event to augment the higher-level information offered by metrics more broadly.
-Exemplars are associated to a specific metric (both name and tag, where applicable), and contain, at minimum, a value.
+Exemplars are associated to a specific counter (both name and tag, where applicable), and contain, at minimum, a value.
 In addition, exemplars can attach labels and timestamps. Labels are user-defined fields of information, provided as quick reference to be displayed.
 A trace id is a common label, as it allows linking to detailed information about that trace.
 Labels are entered as a map, with label names as keys and label values as the values.
