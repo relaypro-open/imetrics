@@ -173,11 +173,9 @@ start_get() ->
 
     imetrics:add(counter2),
     imetrics:add(tagged_counter2, #{tag2 => "val1"}),
-    imetrics:set_gauge(gauge2, 0.6),
     imetrics:set_exemplar(counter2, 3, #{test_label => test_label_value}, 1262304000),
     imetrics:set_exemplar(tagged_counter2, #{tag2 => "val1"}, 1.23, 946684800),
     imetrics:set_exemplar(tagged_counter2, 100, 946684800),
-    imetrics:set_exemplar(gauge2, 0.57, 946684800),
     F.
 
 get_test(_Fixture) ->
@@ -239,7 +237,8 @@ start_http() ->
 
 http_test(#{port := Port}) ->
     http_test_varz(#{port => Port}) ++ http_test_openmetrics(#{port => Port}) ++
-    http_test_varz_strict(#{port => Port}) ++ http_test_openmetrics_strict(#{port => Port}).
+    http_test_varz_strict(#{port => Port}) ++ http_test_openmetrics_strict(#{port => Port}) ++
+    http_test_openmetrics_exemplars(#{port => Port}).
 
 http_test_varz(#{port := Port}) ->
     Url = "http://localhost:"++integer_to_list(Port)++"/imetrics/varz:get",
@@ -254,7 +253,6 @@ http_test_varz(#{port := Port}) ->
         "mapped_counter key:1",
         "fn_gauge 1.5",
         "gauge 1.5",
-        "gauge2 0.6",
         "mapped_gauge $dim:key value:1.5",
         "stats max:10 min:10 n:1 sum:10 sum2:100"],
     Res2 = string:join(Res, "\n") ++ "\n",
@@ -273,7 +271,7 @@ http_test_openmetrics(#{port := Port}) ->
         "# TYPE counter counter",
         "counter{} 1",
         "# TYPE counter2 counter",
-        "counter2{} 1 # {test_label=\"test_label_value\"} 3 1262304000",
+        "counter2{} 1",
         "# TYPE counter:tuple:colon counter",
         "counter:tuple:colon{} 1",
         "# TYPE counter_tuple counter",
@@ -283,13 +281,11 @@ http_test_openmetrics(#{port := Port}) ->
         "# TYPE tagged_counter counter",
         "tagged_counter{tag1=\"val1\"} 1",
         "# TYPE tagged_counter2 counter",
-        "tagged_counter2{tag2=\"val1\"} 1 # {} 1.23 946684800",
+        "tagged_counter2{tag2=\"val1\"} 1",
         "# TYPE fn_gauge gauge",
         "fn_gauge{} 1.5",
         "# TYPE gauge gauge",
         "gauge{} 1.5",
-        "# TYPE gauge2 gauge",
-        "gauge2{} 0.6 # {} 0.57 946684800",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
         "# TYPE stats unknown",
@@ -332,7 +328,7 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "# TYPE counter counter",
         "counter{} 1",
         "# TYPE counter2 counter",
-        "counter2{} 1 # {test_label=\"test_label_value\"} 3 1262304000",
+        "counter2{} 1",
         "# TYPE counter:tuple:colon counter",
         "counter:tuple:colon{} 1",
         "# TYPE counter_tuple counter",
@@ -342,13 +338,48 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "# TYPE tagged_counter counter",
         "tagged_counter{tag1=\"val1\"} 1",
         "# TYPE tagged_counter2 counter",
-        "tagged_counter2{tag2=\"val1\"} 1 # {} 1.23 946684800",
+        "tagged_counter2{tag2=\"val1\"} 1",
         "# TYPE fn_gauge gauge",
         "fn_gauge{} 1.5",
         "# TYPE gauge gauge",
         "gauge{} 1.5",
-        "# TYPE gauge2 gauge",
-        "gauge2{} 0.6 # {} 0.57 946684800",
+        "# TYPE mapped_gauge gauge",
+        "mapped_gauge{key=\"value\"} 1.5",
+        "# EOF"],
+    Res2 = string:join(Res, "\n") ++ "\n",
+    [
+        ?_assertEqual(Res2, Body),
+        ?_assertEqual(200, Code)
+    ].
+
+http_test_openmetrics_exemplars(#{port := Port}) ->
+    Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
+    application:set_env(imetrics, strict_openmetrics_compat, true),
+    application:set_env(imetrics, openmetrics_exemplar_compat, true),
+    {ok, {Status, _Headers, Body}} = 
+        httpc:request(get, {Url, []}, [], []),
+    application:unset_env(imetrics, strict_openmetrics_compat),
+    {_Vsn, Code, _Friendly} = Status,
+
+    Res = [
+        "# TYPE counter counter",
+        "counter_total{} 1",
+        "# TYPE counter2 counter",
+        "counter2_total{} 1 # {test_label=\"test_label_value\"} 3 1262304000",
+        "# TYPE counter:tuple:colon counter",
+        "counter:tuple:colon_total{} 1",
+        "# TYPE counter_tuple counter",
+        "counter_tuple_total{} 1",
+        "# TYPE mapped_counter counter",
+        "mapped_counter_total{map_key=\"key\"} 1",
+        "# TYPE tagged_counter counter",
+        "tagged_counter_total{tag1=\"val1\"} 1",
+        "# TYPE tagged_counter2 counter",
+        "tagged_counter2_total{tag2=\"val1\"} 1 # {} 1.23 946684800",
+        "# TYPE fn_gauge gauge",
+        "fn_gauge{} 1.5",
+        "# TYPE gauge gauge",
+        "gauge{} 1.5",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
         "# EOF"],

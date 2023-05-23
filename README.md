@@ -96,7 +96,7 @@ imetrics:set_stats(ievent_expiration_jobs, Stats2)
 
 Exemplars are data points that can be added on top of a chart to provide information on a
 specific example of an event to augment the higher-level information offered by metrics more broadly.
-Exemplars are associated to a specific metric (both name and tag, where applicable), and contain, at minimum, a value.
+Exemplars are associated to a specific counter (both name and tag, where applicable), and contain, at minimum, a value.
 In addition, exemplars can attach labels and timestamps. Labels are user-defined fields of information, provided as quick reference to be displayed.
 A trace id is a common label, as it allows linking to detailed information about that trace.
 Labels are entered as a map, with label names as keys and label values as the values.
@@ -174,10 +174,10 @@ The URI for accessing this data is `/metrics`.
 ```
 $ curl localhost:8085/metrics
 # TYPE client_connections counter
-client_connections{} 1
+client_connections_total{} 1
 # TYPE http_responses counter
-http_responses{code="404"} 1
-http_responses{code="200"} 1
+http_responses_total{code="404"} 1
+http_responses_total{code="200"} 1
 # TYPE cpu_load_avg gauge
 cpu_load_avg{granularity="1min"} 0.1
 cpu_load_avg{granularity="5min"} 3.4

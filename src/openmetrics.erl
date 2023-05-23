@@ -50,14 +50,14 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
     case {ShouldPrintMetric, MetricValue} of
         {ok, Value} when is_number(Value) ->
             VStr = strnum(Value),
-            cowboy_req:stream_body([Name, " ", VStr, get_exemplar_string(Name), "\n"], nofin, Req);
+            cowboy_req:stream_body([Name, " ", VStr, "\n"], nofin, Req);
         {ok, Map} when is_map(Map) ->
             MappedValues = maps:to_list(Map),
             deliver_legacy_mapped_metric(Req, Name, MappedValues);
         {ok, MappedValues} when is_list(MappedValues) ->
             case MappedValues of
                 [{Tags, _Value} | _] when is_map(Tags) ->
-                    deliver_mapped_metric(Req, Name, MappedValues);
+                    deliver_mapped_metric(Req, Type, Name, MappedValues);
                 _ ->
                     deliver_legacy_mapped_metric(Req, Name, MappedValues)
             end;
@@ -65,8 +65,6 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
             ok
     end.
 
-get_exemplar_string(Name) ->
-    get_exemplar_string(Name, #{}).
 get_exemplar_string(Name, Tags) ->
     TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name }),
     case imetrics:get_exemplar(TagsWithName) of
@@ -94,20 +92,24 @@ deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
             deliver_legacy_mapped_metric(Req, Name, Tail);
         _ ->
             cowboy_req:stream_body(
-                [<<Name/binary, "{">>, <<"map_key">>, "=\"", Key, "\"} ", strnum(Value), get_exemplar_string(Name), "\n"], nofin, Req
+                [<<Name/binary, "{">>, <<"map_key">>, "=\"", Key, "\"} ", strnum(Value), "\n"], nofin, Req
             ),
             deliver_legacy_mapped_metric(Req, Name, Tail)
     end;
 deliver_legacy_mapped_metric(_Req, _Name, []) ->
     ok.
 
-deliver_mapped_metric(Req, Name, [{Tags, Value} | Tail]) ->
+deliver_mapped_metric(Req, Type, Name, [{Tags, Value} | Tail]) ->
     TagString = create_tag_string(Tags),
-    cowboy_req:stream_body(
-        [Name, TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req
-    ),
-    deliver_mapped_metric(Req, Name, Tail);
-deliver_mapped_metric(_Req, _Name, []) ->
+    case {Type, application:get_env(imetrics, openmetrics_exemplar_compat, false)} of
+        {counter, true} ->
+            cowboy_req:stream_body([Name, "_total", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
+        {_, _} ->
+            cowboy_req:stream_body([Name, TagString, " ", strnum(Value), "\n"], nofin, Req)
+        end,
+    
+    deliver_mapped_metric(Req, Type, Name, Tail);
+deliver_mapped_metric(_Req, _Type, _Name, []) ->
     ok.
 
 create_tag_string(Tags) ->
