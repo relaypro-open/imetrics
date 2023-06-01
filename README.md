@@ -75,6 +75,32 @@ metrics are more flexible down the road.
 across a set of Erlang processes. Please see the `imetrics_actors` module for documentation
 and an example.
 
+
+### Histograms ###
+
+Histograms are a way to take a continuous set of data and turn it into discrete "buckets," counting the number of elements that occur in a given range. Any value must be able to be accepted by a histogram, so the minimum bucket will count any elements <= to the value stored, and an additional "infinite" bucket will be added on top of any defined buckets to capture any values greater than the maximum value defined. Buckets can be defined manually by providing a list of cutoffs, or generated automatically, with an even distribution, by providing a min, max, and number of buckets.
+
+```erlang
+%manually define bucket cutoffs
+imetrics_hist_openmetrics:new(http_response_time, [0, 0.01, 0.05, 0.1, 0.2, 1, 10]),
+%automatically generate evenly distributed cutoffs (in this case, 0, 4, 8, ..., 1000)
+imetrics_hist_openmetrics:new(packet_size, [0, 1000], 251).
+```
+
+ Histograms are incremented by indicating a continuous value, which will add one to the bucket in which that value would fall.
+
+ ```erlang
+ %using the buckets from above, add one to the 0.05 bucket
+imetrics_hist_openmetrics:add(http_response_time, 0.03).
+ ```
+
+Histograms can also be *tagged*, just like Counters and Gauges.
+
+```erlang
+imetrics_hist_openmetrics:new(http_response_time, #{code => "200"}, [0, 0.01, 0.05, 0.1, 0.2, 1, 10]),
+imetrics_hist_openmetrics:new(http_response_time, #{code => "408"}, [0, 0.1, 1, 10, 100]).
+```
+
 ### Stats ###
 
 Stats is a map tracking stats about a collection of values without
@@ -96,7 +122,7 @@ imetrics:set_stats(ievent_expiration_jobs, Stats2)
 
 Exemplars are data points that can be added on top of a chart to provide information on a
 specific example of an event to augment the higher-level information offered by metrics more broadly.
-Exemplars are associated to a specific counter (both name and tag, where applicable), and contain, at minimum, a value.
+Exemplars are associated to a specific counter or histogram bucket (both name and tag, where applicable), and contain, at minimum, a value.
 In addition, exemplars can attach labels and timestamps. Labels are user-defined fields of information, provided as quick reference to be displayed.
 A trace id is a common label, as it allows linking to detailed information about that trace.
 Labels are entered as a map, with label names as keys and label values as the values.
@@ -107,12 +133,15 @@ If exemplars are not updated between queries, additional copies of the exemplar 
 so creating exemplars on infrequent events will not result in overpopulation of the data set.
 Additionally, whenever `set_exemplar` is called, the previous exemplar associated with the given
 name and tags will be overwritten, meaning only the most recently passed exemplar will be stored at any given time.
-`set_exemplar` does not check to see if the added exemplar is associated with any actual values, and will always return true.
+`imetrics:set_exemplar` does not check to see if the added exemplar is associated with any actual values, and will always return true. `imetrics_hist_openmetrics:set_exemplar`, the function for adding exemplars to histograms works slightly differently, in that the value provided for the exemplar determines which bucket it is associated with in the histogram, and if the function is called for a histogram/tag combination that does not exist, this function will return `{error, {badarg, check_ets}}`.
 ```erlang
 %Minimal set_exemplar
 imetrics:set_exemplar(http_responses, 1),
 %set_exemplar with all details included
-imetrics:set_exemplar(http_responses, #{ code => "404" }, 1, #{traceid => "oHg5SJYRHA0"}, 1684267027.342).
+imetrics:set_exemplar(http_responses, #{ code => "404" }, 1, #{traceid => "oHg5SJYRHA0"}, 1684267027.342),
+
+%Setting an exemplar on a histogram:
+imetrics_hist_openmetrics:set_exemplar(http_response_times, #{code => "408"}, 15.3).
 ```
 
 ### Allowed types ###
@@ -231,11 +260,12 @@ cpu_load_avg 1min:0.1 5min:3.4
 Configuration
 -------------
 
-| env var                     | default   | desc                                                         |
-| --------------------------- | --------- | ------------------------------------------------------------ |
-| `http_server_port`          | `8085`    | Listening port                                               |
-| `separator`                 | `<<"_">>` | binary string used to separate tuple elements for Name, Key  |
-| `strict_openmetrics_compat` | `false`   | If set to `true`, metrics will only display on the old HTTP endpoint if they aren't compatible with the OpenMetrics endpoint. Metrics will only display on one endpoint or the other, never both. |
+| env var                       | default   | desc                                                         |
+| ----------------------------- | --------- | ------------------------------------------------------------ |
+| `http_server_port`            | `8085`    | Listening port                                               |
+| `separator`                   | `<<"_">>` | binary string used to separate tuple elements for Name, Key  |
+| `strict_openmetrics_compat`   | `false`   | If set to `true`, metrics will only display on the old HTTP endpoint if they aren't compatible with the OpenMetrics endpoint. Metrics will only display on one endpoint or the other, never both. |
+| `openmetrics_exemplar_compat` | `false`   | If set to `true`, counters will display with _total appended to their end, and exemplars will be displayed for counters. When `false`, counters will not get the appended suffix, and exemplars will not be displayed. |
 
 ## OpenMetrics conversion
 
