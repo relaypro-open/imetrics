@@ -41,14 +41,14 @@ set_exemplar(Name, Tags, EValue, Labels, Timestamp) ->
                 [{_, _}] ->
                     Bucket = find_bucket(TagsWithName, EValue, 1),
                     [{_, BucketVal, _}] = ets:lookup(?MODULE, {TagsWithName, Bucket}),
-                    case BucketVal of
-                        _ when is_float(BucketVal) -> BucketVal2 = imetrics_utils:bin(float_to_list(BucketVal, [short]));
-                        _ -> BucketVal2 = imetrics_utils:bin(BucketVal) end,
+                    BucketVal2 = case BucketVal of
+                        _ when is_float(BucketVal) -> imetrics_utils:bin(float_to_list(BucketVal, [short]));
+                        _ -> imetrics_utils:bin(BucketVal) end,
                     TagsWithLabel = imetrics_utils:bin(TagsWithName#{le => BucketVal2}),
                     ets:insert(imetrics_exemplars, {TagsWithLabel, EValue, BinList, Timestamp});
                 [] ->
                     error(badarg)
-                end
+            end
         end
     ).
 
@@ -114,13 +114,13 @@ get_all() ->
                                 [], Identifiers);
                         [] ->
                             get_hist(Name)
-                        end,
-                        [{imetrics_utils:bin(Name), Group} | Acc]
+                    end,
+                    [{imetrics_utils:bin(Name), Group} | Acc]
                 end,
                 [], Names);
         [] ->
             []
-        end.
+    end.
 
 get_hist(Identifier) when is_map(Identifier) ->
     get_hist(Identifier, 1, 0, []);
@@ -139,10 +139,10 @@ get_hist(Identifier, BucketPos, Count, Acc) ->
                     get_hist(Identifier, BucketPos+1, Count+Value, [{Tags#{le => imetrics_utils:bin(float_to_list(Cutoff, [short]))}, Value+Count} | Acc]);
                 _ ->
                     get_hist(Identifier, BucketPos+1, Count+Value, [{Tags#{le => imetrics_utils:bin(Cutoff)}, Value+Count} | Acc])
-                end;
+            end;
         [] ->
             []
-            end.
+    end.
 
 
 calculate_buckets(Bucket, Rem, Diff, Acc) when Rem >= 0 ->
@@ -162,40 +162,24 @@ store_name(Name, Tags) ->
             ets:insert(?MODULE, {names, Map#{Name => Name}});
         [] ->
             ets:insert(?MODULE, {names, #{Name => Name}})
-        end,
-        TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name}),
+    end,
+    TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name}),
     case ets:lookup(?MODULE, {names, Name}) of
         [{_, TagMap}] ->
             ets:insert(?MODULE, {{names, Name}, TagMap#{TagsWithName => TagsWithName}});
         [] ->
             ets:insert(?MODULE, {{names, Name}, #{TagsWithName => TagsWithName}})
-        end.
+    end.
 
 find_bucket(Identifier, Value, Pos) ->
     case ets:lookup(?MODULE, {Identifier, Pos}) of
-    [{_, Cutoff, _Value}] ->
-        case Cutoff of
-            C when C >= Value ->
-                Pos;
-            _ ->
-                find_bucket(Identifier, Value, Pos+1)
+        [{_, Cutoff, _Value}] ->
+            case Cutoff of
+                C when C >= Value ->
+                    Pos;
+                _ ->
+                    find_bucket(Identifier, Value, Pos+1)
             end;
-    [] ->
-        error(badarg)
+        [] ->
+            error(badarg)
     end.
-
-
-
-
-
-
-%%% Current table: {{Name, metatdata}, NumBuckets}
-%%%                {{Name, BucketNum}, Cutoff, Value}
-%%%                {names, [Name1, Name2, ...]}
-%%% 
-%%% With tags: {{Name, BucketNum}, Cutoff, [{Value1, #{Tags}}, {Value2, #{Tags}}, {Value3, #{Tags}}] <-- Will this break tag sets if they don't, for example, have an inf bucket?
-%%%            {names, [{Name1, Tags1}, {Name1, Tags2}, {Name2, Tags}, ...]} <-- Only do this if not changing line 1
-%%%            {names, [Name1, Name2, ...]}
-%%%            {{names, Name1}, [#{TagSet1}, #{TagSet2}, ...]} <-- could be used with above line instead of line 2
-%%% 
-%%%            {names, [

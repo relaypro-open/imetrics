@@ -76,7 +76,7 @@ get_exemplar_string(Name, Tags) ->
             " # {" ++ create_label_string(Labels) ++ "} " ++ EStr ++ " " ++ TStr;
         undefined ->
             ""
-        end.
+    end.
 
 create_label_string(Labels) ->
     Result = maps:fold(fun(Label, Value, Acc) -> (", " ++ binary:bin_to_list(imetrics_utils:bin(Label)) ++ "=\"" ++ binary:bin_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
@@ -86,7 +86,7 @@ create_label_string(Labels) ->
         _ ->
             [_, _ | Result2] = Result,
             Result2
-        end.
+    end.
 
 deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
     case Key of
@@ -110,7 +110,7 @@ deliver_mapped_metric(Req, Type, Name, [{Tags, Value} | Tail]) ->
             cowboy_req:stream_body([Name, "_bucket", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
         {_, _} ->
             cowboy_req:stream_body([Name, TagString, " ", strnum(Value), "\n"], nofin, Req)
-        end,
+    end,
     
     deliver_mapped_metric(Req, Type, Name, Tail);
 deliver_mapped_metric(_Req, _Type, _Name, []) ->

@@ -275,7 +275,7 @@ get_exemplar(Key) ->
             undefined;
         [{_Name, EValue, Labels, Timestamp}] ->
             {EValue, Labels, Timestamp}
-        end.
+    end.
 
 get_hist() ->
     imetrics_hist:get_all().
