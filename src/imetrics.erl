@@ -254,7 +254,8 @@ get_with_types() ->
     Counters = [{MetricName, {counter, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_counters)],
     Gauges = [{MetricName, {gauge, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_gauges)],
     Stats = [{MetricName, {stat, MetricPoints}} || {MetricName, MetricPoints} <- get_unmapped(imetrics_stats)],
-    Counters ++ Gauges ++ Stats.
+    Histograms = [{MetricName, {histogram, MetricPoints}} || {MetricName, MetricPoints} <- imetrics_hist_openmetrics:get_all()],
+    Counters ++ Gauges ++ Stats ++ Histograms.
 
 get_counters() ->
     Counters = get_mapped(imetrics_counters),
@@ -274,7 +275,7 @@ get_exemplar(Key) ->
             undefined;
         [{_Name, EValue, Labels, Timestamp}] ->
             {EValue, Labels, Timestamp}
-        end.
+    end.
 
 get_hist() ->
     imetrics_hist:get_all().
