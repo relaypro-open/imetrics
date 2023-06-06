@@ -42,10 +42,10 @@ add_test_() ->
 add_test(_Fixture) ->
     [
         ?_assertEqual(true, imetrics_hist_openmetrics:new(simple, [0])),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(simple, -1)),
-        ?_assertEqual(2, imetrics_hist_openmetrics:add(simple, -1)),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(simple, 1)),
-        ?_assertEqual(3, imetrics_hist_openmetrics:add(simple, 0)),
+        ?_assertEqual({1,1}, imetrics_hist_openmetrics:add(simple, -1)),
+        ?_assertEqual({1,2}, imetrics_hist_openmetrics:add(simple, -1)),
+        ?_assertEqual({2,1}, imetrics_hist_openmetrics:add(simple, 1)),
+        ?_assertEqual({1,3}, imetrics_hist_openmetrics:add(simple, 0)),
         ?_assertEqual({error, {badarg, check_ets}}, imetrics_hist_openmetrics:add(fake_hist, 0)),
         ?_assertEqual({error, {badarg, check_ets}}, imetrics_hist_openmetrics:add(simple, #{bad_tag => "bad"}, 0)),
 
@@ -53,12 +53,12 @@ add_test(_Fixture) ->
         ?_assertEqual(true, imetrics_hist_openmetrics:new(tagged, #{tag => "one"}, [0, 1, 2])),
         ?_assertEqual(true, imetrics_hist_openmetrics:new(tagged, #{tag => "two"}, [0, 0.5, 1])),
         ?_assertEqual(true, imetrics_hist_openmetrics:new(tagged, #{another_tag => "one"}, [0, 1, 2])),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 0.25)), %test independence
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{tag => "two"}, 0.25)),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{another_tag => "one"}, 0.25)),
-        ?_assertEqual(2, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 0.75)), %test different thresholds
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{tag => "two"}, 0.75)),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{another_tag => "one"}, 0))
+        ?_assertEqual({2,1}, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 0.25)), %test independence
+        ?_assertEqual({2,1}, imetrics_hist_openmetrics:add(tagged, #{tag => "two"}, 0.25)),
+        ?_assertEqual({2,1}, imetrics_hist_openmetrics:add(tagged, #{another_tag => "one"}, 0.25)),
+        ?_assertEqual({2,2}, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 0.75)), %test different thresholds
+        ?_assertEqual({3,1}, imetrics_hist_openmetrics:add(tagged, #{tag => "two"}, 0.75)),
+        ?_assertEqual({1,1}, imetrics_hist_openmetrics:add(tagged, #{another_tag => "one"}, 0))
     ].
 
 get_test_() ->
@@ -76,9 +76,9 @@ get_test(_Fixture) ->
 
         ?_assertEqual([{<<"simple">>, [{#{le => <<"0">>}, 0},{#{le => <<"+Inf">>}, 0}]}], imetrics_hist_openmetrics:get_all()),
 
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(simple, 0)),
+        ?_assertEqual({1,1}, imetrics_hist_openmetrics:add(simple, 0)),
         ?_assertEqual([{#{le => <<"0">>}, 1},{#{le => <<"+Inf">>}, 1}], imetrics_hist_openmetrics:get_hist(simple)),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(simple, 1)),
+        ?_assertEqual({2,1}, imetrics_hist_openmetrics:add(simple, 1)),
         ?_assertEqual([{#{le => <<"0">>}, 1},{#{le => <<"+Inf">>}, 2}], imetrics_hist_openmetrics:get_hist(simple)),
         
         ?_assertEqual(true, imetrics_hist_openmetrics:new(tagged, #{tag => "one"}, [0, 1, 2])),
@@ -111,10 +111,10 @@ get_test(_Fixture) ->
                         [{#{le => <<"0">>}, 1},
                         {#{le => <<"+Inf">>}, 2}]}], imetrics_hist_openmetrics:get_all()),
 
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 1)),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 2)),
-        ?_assertEqual(2, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 2)),
-        ?_assertEqual(1, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 5)),
+        ?_assertEqual({2,1}, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 1)),
+        ?_assertEqual({3,1}, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 2)),
+        ?_assertEqual({3,2}, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 2)),
+        ?_assertEqual({4,1}, imetrics_hist_openmetrics:add(tagged, #{tag => "one"}, 5)),
                 ?_assertEqual([{<<"tagged">>,
                         [{#{le => <<"1">>, tag => <<"two">>}, 0},
                         {#{le => <<"1.01">>, tag => <<"two">>}, 0},

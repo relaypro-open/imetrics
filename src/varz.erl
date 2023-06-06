@@ -1,7 +1,7 @@
 -module(varz).
 
 -export([init/2, terminate/3]).
--export([get/1, counters/1, gauges/1, hist/1, hist_percentiles/1, slo/1]).
+-export([get/1, counters/1, gauges/1, hist/1, slo/1]).
 
 % cowboy functions:
 init(Req, State) ->
@@ -41,25 +41,6 @@ gauges(Req) ->
 hist(Req) ->
     handle(Req, fun imetrics:get_hist/0).
 
-hist_percentiles(Req) ->
-    % We create a resource key that's the combination of the user agent and the entire
-    % query string. Note: this breaks HTTP conventions (namely GET should be idempotent)
-    QS = cowboy_req:parse_qs(Req),
-    K = qs_str_val(k, QS, ?MODULE_STRING),
-    E = qs_e_val(QS),
-    Key = resource_key(K, Req),
-    handle(
-        Req,
-        fun() ->
-            {Age, Data} = imetrics:get_hist_percentiles(Key, E),
-            RespHeaders = #{
-                <<"content-type">> => <<"text/plain">>,
-                <<"x-imetrics-interval-millis">> => [integer_to_list(Age)]
-            },
-            {RespHeaders, Data}
-        end
-    ).
-
 slo(Req) ->
     QS = cowboy_req:parse_qs(Req),
     case qs_atom_val(n, QS, ?MODULE_STRING) of
@@ -72,16 +53,6 @@ slo(Req) ->
                 UId ->
                     handle(Req, fun() -> imetrics:get_slo(UIdName, UId) end)
             end
-    end.
-
-qs_e_val(QS) ->
-    Default = 1,
-    Value = proplists:get_value(<<"e">>, QS),
-    case Value of
-        undefined ->
-            Default;
-        X ->
-            binary_to_integer(X)
     end.
 
 qs_atom_val(Name, QS, Default) ->
@@ -101,15 +72,6 @@ qs_str_val(Name, QS, Default) ->
         X ->
             binary_to_list(X)
     end.
-
-resource_key(K, Req) ->
-    UserAgent = cowboy_req:header(<<"http_user_agent">>, Req, <<"default">>),
-    iolist_to_binary([
-        "imetrics_resource_key_",
-        UserAgent,
-        "_",
-        K
-    ]).
 
 handle(Req, DataFun) ->
     try

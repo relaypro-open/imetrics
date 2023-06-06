@@ -60,7 +60,7 @@ add(Name, Tags, Value) ->
         begin
             TagsWithName = imetrics_utils:bin(Tags#{'__name__' => Name}),
             Bucket = find_bucket(TagsWithName, Value, 1),
-            ets:update_counter(?MODULE, {TagsWithName, Bucket}, {3, 1})
+            {Bucket, ets:update_counter(?MODULE, {TagsWithName, Bucket}, {3, 1})}
         end
     ).
 
