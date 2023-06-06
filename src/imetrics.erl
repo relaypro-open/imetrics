@@ -8,13 +8,11 @@
 
 -export([set_counter_dimension/2, register_slo/2]).
 
--export([hist/3, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tick_s/4, tock_s/2, tock_as_s/3, stop_tick_s/2]).
+-export([hist/2, hist/3, hist/4, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tick_s/4, tock_s/2, tock_as_s/3, stop_tick_s/2]).
 
 -export([stats/1, set_stats/2]).
 
--export([get/0, get_with_types/0, get_counters/0, get_gauges/0, get_hist/0, get_hist_percentiles/2, foldl_slo/3, get_slo/2, get_exemplar/1]).
-
--export([clean_checkpoints/0]).
+-export([get/0, get_with_types/0, get_counters/0, get_gauges/0, get_hist/0, foldl_slo/3, get_slo/2, get_exemplar/1]).
 
 -compile({no_auto_import,[get/0]}).
 
@@ -171,8 +169,14 @@ set_stats(Name, Stats) ->
        end
     ).
 
+hist(Name, Buckets) ->
+   imetrics_hist_openmetrics:new(Name, Buckets).
+hist(Name, Tags, Buckets) when is_map(tags) ->
+   imetrics_hist_openmetrics:new(Name, Tags, Buckets);
 hist(Name, Range=[_Min, _Max], NumBuckets) when is_integer(NumBuckets) ->
-    imetrics_hist:new(Name, Range, NumBuckets).
+    imetrics_hist_openmetrics:new(Name, Range, NumBuckets).
+hist(Name, Tags, Range=[_Min, _Max], NumBuckets) when is_integer(NumBuckets) ->
+   imetrics_hist_openmetrics:new(Name, Tags, Range, NumBuckets).
 
 tick(Name) ->
     tick(Name, microsecond).
@@ -189,7 +193,7 @@ tock(Tick, Fun) ->
 tock_as(Tick, NewName) ->
     tock_as(Tick, NewName,
             fun(Name, Diff) ->
-                    imetrics_hist:add(Name, Diff)
+                    imetrics_hist_openmetrics:add(Name, Diff)
             end).
 
 tock_as({Name, Unit, Ts}, '_', Fun) when is_function(Fun) ->
@@ -278,89 +282,13 @@ get_exemplar(Key) ->
     end.
 
 get_hist() ->
-    imetrics_hist:get_all().
+    imetrics_hist_openmetrics:get_all().
 
 foldl_slo(UIdName, F, A) ->
     imetrics_slo:foldl_dump(UIdName, F, A).
 
 get_slo(UIdName, UId) ->
     imetrics_slo:dump(UIdName, UId).
-
-get_hist_percentiles(Key, E) ->
-    PercentileList = lists:flatten(percentile_list(E)),
-    Now = erlang:monotonic_time(millisecond),
-    NowHistData = get_hist(),
-    case get_checkpoint({hist_percentiles, Key}) of
-        {ok, CheckpointData, CheckpointTime} ->
-            set_checkpoint({hist_percentiles, Key}, NowHistData, Now),
-            IntervalData = lists:filtermap(
-                             fun({HistName, HistDataB}) ->
-                                     case proplists:get_value(HistName, CheckpointData) of
-                                         undefined ->
-                                             false;
-                                         HistDataA ->
-                                             Diff = imetrics_hist:subtract(HistDataB, HistDataA),
-                                             case imetrics_hist:approximate_percentiles(Diff,
-                                                                PercentileList) of
-                                                 [] ->
-                                                     false;
-                                                 Percentiles ->
-                                                    {true, {HistName, [{<<"$dim">>, <<"pctile">>}|Percentiles]}}
-                                             end
-                                     end
-                             end, NowHistData),
-            {Now-CheckpointTime, IntervalData};
-        {error, not_found} ->
-            set_checkpoint({hist_percentiles, Key}, NowHistData, Now),
-            {0, []}
-    end.
-
-% hard coded to avoid floating point error
-percentile_list(E) when E < 1 -> [0.5];
-percentile_list(1) -> [0.1, percentile_list(0), 0.9];
-percentile_list(2) -> [0.01, percentile_list(1), 0.99];
-percentile_list(3) -> [0.001, percentile_list(2), 0.999];
-percentile_list(4) -> [0.0001, percentile_list(3), 0.9999];
-percentile_list(5) -> [0.00001, percentile_list(4), 0.99999];
-percentile_list(6) -> [0.000001, percentile_list(5), 0.999999];
-percentile_list(7) -> [0.0000001, percentile_list(6), 0.9999999];
-percentile_list(8) -> [0.00000001, percentile_list(7), 0.99999999];
-percentile_list(9) -> [0.000000001, percentile_list(8), 0.999999999];
-percentile_list(_) -> percentile_list(9).
-
-set_checkpoint(Key, Data, Now) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-            ets:insert(imetrics_data_checkpoint,
-                       {Key, Data, Now})
-       end).
-
-get_checkpoint(Key) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-            case ets:lookup(imetrics_data_checkpoint, Key) of
-                [{_, Data, Time}] ->
-                    {ok, Data, Time};
-                _ ->
-                    {error, not_found}
-            end
-       end).
-
-clean_checkpoints() ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           MaxAgeHr = application:get_env(imetrics, checkpoint_max_age_hr, 12),
-           Expired = erlang:monotonic_time(millisecond) - timer:hours(MaxAgeHr),
-           ExpiredKeys = ets:foldl(
-             fun({Key, _, Time}, Acc) ->
-                     if Time < Expired ->
-                            [Key|Acc];
-                        true ->
-                            Acc
-                     end
-             end, [], imetrics_data_checkpoint),
-           [ ets:delete(imetrics_data_checkpoint, X) || X <- ExpiredKeys ]
-       end).
     
 %% ---
 
