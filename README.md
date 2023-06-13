@@ -78,7 +78,7 @@ and an example.
 
 ### Histograms ###
 
-Histograms are a way to take a continuous set of data and turn it into discrete "buckets," counting the number of elements that occur in a given range. Any value must be able to be accepted by a histogram, so the minimum bucket will count any elements <= to the value stored, and an additional "infinite" bucket will be added on top of any defined buckets to capture any values greater than the maximum value defined. Buckets can be defined manually by providing a list of cutoffs, or generated automatically, with an even distribution, by providing a min, max, and number of buckets.
+Histograms are a way to take a continuous set of data and turn it into discrete "buckets," counting the number of elements that occur in a given range. Any value must be able to be accepted by a histogram, so the minimum bucket will count any elements <= to the value stored, and an additional "infinite" bucket will be added on top of any defined buckets to capture any values greater than the maximum value defined. Buckets can be defined manually by providing a list of cutoffs, or generated automatically, with an even distribution, by providing a min, max, and number of buckets. The maximum number of buckets a histogram can have is limited by an environment variable (see below).
 
 ```erlang
 %manually define bucket cutoffs
@@ -265,7 +265,8 @@ Configuration
 | `http_server_port`            | `8085`    | Listening port                                               |
 | `separator`                   | `<<"_">>` | binary string used to separate tuple elements for Name, Key  |
 | `strict_openmetrics_compat`   | `false`   | If set to `true`, metrics will only display on the old HTTP endpoint if they aren't compatible with the OpenMetrics endpoint. Metrics will only display on one endpoint or the other, never both. |
-| `openmetrics_exemplar_compat` | `false`   | If set to `true`, counters will display with _total appended to their end, and exemplars will be displayed for counters. When `false`, counters will not get the appended suffix, and exemplars will not be displayed. |
+| `openmetrics_exemplar_compat` | `false`   | If set to `true`, counters will display with _total appended to their end, and exemplars will be displayed for counters. When `false`, counters will not get the appended suffix, and exemplars will not be displayed on counters. |
+| `hist_max_buckets`            | `64`      | Upper limit on the number of buckets for histograms. Calls to create a histogram with more buckets than this value will fail. |
 
 ## OpenMetrics conversion
 

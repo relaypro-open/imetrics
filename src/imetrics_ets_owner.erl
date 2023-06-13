@@ -31,7 +31,6 @@ init([]) ->
     ets:new(imetrics_gauges, [public, named_table]),
     ets:new(imetrics_map_keys, [public, named_table]),
     ets:new(imetrics_stats, [public, named_table]),
-    ets:new(imetrics_hist, [public, named_table]),
     ets:new(imetrics_hist_openmetrics, [public, named_table]),
     ets:new(imetrics_vm_metrics, [public, named_table]),
     ets:new(imetrics_exemplars, [public, named_table]),

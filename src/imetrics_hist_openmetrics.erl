@@ -69,9 +69,15 @@ new(Name, Buckets) ->
 new(Name, Tags, Buckets) when is_map(Tags) ->
     ?CATCH_KNOWN_EXC(
         begin
-            TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name}),
-            make_buckets(TagsWithName, 1, Buckets),
-            store_name(Name, Tags)
+            MaxBuckets = application:get_env(imetrics, hist_max_buckets, 64),
+            case length(Buckets) of
+                X when X > MaxBuckets ->
+                    error(badarg);
+                _ ->
+                    TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name}),
+                    make_buckets(TagsWithName, 1, Buckets),
+                    store_name(Name, Tags)
+            end
         end  
     );
 
@@ -83,18 +89,21 @@ new(Name, Tags, Range, NumBuckets) ->
             TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name}),
             [Min, Max] = Range,
             Delta = Max-Min,
-            case {NumBuckets, Delta} of
-                {0, _} ->
+            MaxBuckets = application:get_env(imetrics, hist_max_buckets, 64),
+            case {NumBuckets, Delta, NumBuckets} of
+                {_, _, X} when X > MaxBuckets ->
+                    error(badarg);
+                {0, _, _} ->
                     make_buckets(TagsWithName, 1, []),
                     store_name(Name, Tags);
-                {1, 0} ->
+                {1, 0, _} ->
                     make_buckets(TagsWithName, 1, [Min]),
                     store_name(Name, Tags);
-                {_, 0} ->
+                {_, 0, _} ->
                     error(badarith);
-                {_, _} ->
+                {_, _, _} ->
                     Diff = Delta/(NumBuckets - 1),
-                    make_buckets(TagsWithName, 1, calculate_buckets(Min, Max, Diff, [])),
+                    make_buckets(TagsWithName, 1, calculate_buckets(NumBuckets, Max, Min, Diff, [])),
                     store_name(Name, Tags)
             end
         end  
@@ -145,10 +154,10 @@ get_hist(Identifier, BucketPos, Count, Acc) ->
     end.
 
 
-calculate_buckets(Bucket, Rem, Diff, Acc) when Rem >= 0 ->
-    calculate_buckets(Bucket+Diff, Rem-Diff, Diff, [Rem | Acc]);
-calculate_buckets(_Bucket, _Rem, _Diff, Acc) ->
-    Acc.
+calculate_buckets(NumBuckets, Rem, Min, Diff, Acc) when NumBuckets > 1 ->
+    calculate_buckets(NumBuckets-1, Rem-Diff, Min, Diff, [Rem | Acc]);
+calculate_buckets(_NumBuckets, _Rem, Min, _Diff, Acc) ->
+    [Min | Acc].
 
 make_buckets(Identifier, CurrBucket, []) ->
     ets:insert(?MODULE, {{Identifier, CurrBucket}, <<"+Inf">>, 0});

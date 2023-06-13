@@ -310,7 +310,7 @@ http_test_openmetrics(#{port := Port}) ->
         "stats{map_key=\"sum\"} 10",
         "stats{map_key=\"sum2\"} 100",
         "# TYPE tagged_hist histogram",
-        "tagged_hist_bucket{hist_tag=\"two\",le=\"0.0\"} 0",
+        "tagged_hist_bucket{hist_tag=\"two\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0.5\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"1.0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"1.5\"} 0",
@@ -332,7 +332,7 @@ http_test_openmetrics(#{port := Port}) ->
         "tagged_hist_bucket{hist_tag=\"two\",le=\"9.5\"} 1",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"10\"} 1",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"+Inf\"} 1",
-        "tagged_hist_bucket{hist_tag=\"one\",le=\"0.0\"} 0",
+        "tagged_hist_bucket{hist_tag=\"one\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.25\"} 0",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.5\"} 1",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.75\"} 1 # {} 0.58 946684800",
@@ -399,7 +399,7 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
         "# TYPE tagged_hist histogram",
-        "tagged_hist_bucket{hist_tag=\"two\",le=\"0.0\"} 0",
+        "tagged_hist_bucket{hist_tag=\"two\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0.5\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"1.0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"1.5\"} 0",
@@ -421,7 +421,7 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "tagged_hist_bucket{hist_tag=\"two\",le=\"9.5\"} 1",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"10\"} 1",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"+Inf\"} 1",
-        "tagged_hist_bucket{hist_tag=\"one\",le=\"0.0\"} 0",
+        "tagged_hist_bucket{hist_tag=\"one\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.25\"} 0",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.5\"} 1",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.75\"} 1 # {} 0.58 946684800",
@@ -474,7 +474,7 @@ http_test_openmetrics_exemplars(#{port := Port}) ->
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
         "# TYPE tagged_hist histogram",
-        "tagged_hist_bucket{hist_tag=\"two\",le=\"0.0\"} 0",
+        "tagged_hist_bucket{hist_tag=\"two\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0.5\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"1.0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"1.5\"} 0",
@@ -496,7 +496,7 @@ http_test_openmetrics_exemplars(#{port := Port}) ->
         "tagged_hist_bucket{hist_tag=\"two\",le=\"9.5\"} 1",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"10\"} 1",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"+Inf\"} 1",
-        "tagged_hist_bucket{hist_tag=\"one\",le=\"0.0\"} 0",
+        "tagged_hist_bucket{hist_tag=\"one\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.25\"} 0",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.5\"} 1",
         "tagged_hist_bucket{hist_tag=\"one\",le=\"0.75\"} 1 # {} 0.58 946684800",
@@ -535,12 +535,12 @@ ticktock_test(_Fixture) ->
     [
         ?_assertEqual({15, 1}, (fun() ->
                     Tick = imetrics:tick(test, millisecond),
-                    timer:sleep(285),
+                    timer:sleep(284),
                     imetrics:tock(Tick)
             end)()),
         ?_assertEqual({15, 1}, (fun() ->
                     Tick = imetrics:tick(test, millisecond),
-                    timer:sleep(285),
+                    timer:sleep(284),
                     imetrics:tock_as(Tick, test2)
             end)())
     ].
@@ -555,14 +555,14 @@ ticktock_s_test(_Fixture) ->
     [
      ?_assertMatch({15, 1}, (fun() ->
                                      {Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
-                                     timer:sleep(285),
+                                     timer:sleep(284),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, Ref),
                                      0 = map_size(Ticks2),
                                      Result
                              end)()),
      ?_assertMatch({15, 2}, (fun() ->
                                      {_Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
-                                     timer:sleep(285),
+                                     timer:sleep(284),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, test),
                                      0 = map_size(Ticks2),
                                      Result
