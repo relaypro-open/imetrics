@@ -1,0 +1,46 @@
+---
+resources:
+- name: imetrics
+  type: git
+  source:
+    uri: https://github.com/relaypro-open/imetrics.git
+- name: erlang
+  type: registry-image
+  source:
+    repository: erlang
+    tag: 25.2
+
+jobs:
+- name: build
+  plan:
+  - get: erlang
+  - get: imetrics
+    trigger: true
+  - task: build
+    image: erlang
+    config:
+      platform: linux
+      inputs:
+      - name: imetrics
+      outputs:
+      - name: imetrics
+      run:
+        dir: imetrics
+        path: rebar3
+        args: ["compile"]
+- name: test
+  plan:
+  - get: erlang
+  - get: imetrics
+    passed: [build]
+    trigger: true
+  - task: test
+    image: erlang
+    config:
+      platform: linux
+      inputs:
+      - name: imetrics
+      run:
+        dir: imetrics
+        path: rebar3
+        args: ["do", "eunit,", "ct"]
