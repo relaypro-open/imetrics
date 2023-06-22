@@ -79,12 +79,12 @@ get_exemplar_string(Name, Tags) ->
     end.
 
 create_label_string(Labels) ->
-    Result = maps:fold(fun(Label, Value, Acc) -> (", " ++ binary:bin_to_list(imetrics_utils:bin(Label)) ++ "=\"" ++ binary:bin_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
+    Result = maps:fold(fun(Label, Value, Acc) -> ("," ++ binary:bin_to_list(imetrics_utils:bin(Label)) ++ "=\"" ++ binary:bin_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
     case length(Result) of
         R when R < 3 ->
             Result;
         _ ->
-            [_, _ | Result2] = Result,
+            [_| Result2] = Result,
             Result2
     end.
 
