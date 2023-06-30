@@ -193,7 +193,8 @@ tock(Tick, Fun) ->
 tock_as(Tick, NewName) ->
     tock_as(Tick, NewName,
             fun(Name, Diff) ->
-                    imetrics_hist_openmetrics:add(Name, Diff)
+                    imetrics_hist_openmetrics:add(Name, Diff),
+                    Diff
             end).
 
 tock_as({Name, Unit, Ts}, '_', Fun) when is_function(Fun) ->

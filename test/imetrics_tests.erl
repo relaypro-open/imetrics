@@ -527,20 +527,20 @@ ticktock_test_() ->
 
 start_ticktock() ->
     F = start(),
-    imetrics:hist(test, [0, 1000], 50),
-    imetrics:hist(test2, [0, 1000], 50),
+    imetrics:hist(test, [1, 10]),
+    imetrics:hist(test2, [1, 10]),
     F.
 
 ticktock_test(_Fixture) ->
     [
-        ?_assertEqual({15, 1}, (fun() ->
-                    Tick = imetrics:tick(test, millisecond),
-                    timer:sleep(284),
+        ?_assertEqual(0, (fun() ->
+                    Tick = imetrics:tick(test, second),
+                    timer:sleep(5),
                     imetrics:tock(Tick)
             end)()),
-        ?_assertEqual({15, 1}, (fun() ->
-                    Tick = imetrics:tick(test, millisecond),
-                    timer:sleep(284),
+        ?_assertEqual(0, (fun() ->
+                    Tick = imetrics:tick(test, second),
+                    timer:sleep(5),
                     imetrics:tock_as(Tick, test2)
             end)())
     ].
@@ -553,16 +553,16 @@ ticktock_s_test_() ->
 
 ticktock_s_test(_Fixture) ->
     [
-     ?_assertMatch({15, 1}, (fun() ->
-                                     {Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
-                                     timer:sleep(284),
+     ?_assertMatch(0, (fun() ->
+                                     {Ref, Ticks} = imetrics:tick_s(#{}, test, second),
+                                     timer:sleep(5),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, Ref),
                                      0 = map_size(Ticks2),
                                      Result
                              end)()),
-     ?_assertMatch({15, 2}, (fun() ->
-                                     {_Ref, Ticks} = imetrics:tick_s(#{}, test, millisecond),
-                                     timer:sleep(284),
+     ?_assertMatch(0, (fun() ->
+                                     {_Ref, Ticks} = imetrics:tick_s(#{}, test, second),
+                                     timer:sleep(5),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, test),
                                      0 = map_size(Ticks2),
                                      Result
