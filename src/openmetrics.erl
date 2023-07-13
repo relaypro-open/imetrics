@@ -44,6 +44,8 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
                 cowboy_req:stream_body(["# TYPE ", Name, " gauge\n"], nofin, Req);
             {histogram, _} ->
                 cowboy_req:stream_body(["# TYPE ", Name, " histogram\n"], nofin, Req);
+            {info, _} ->
+                cowboy_req:stream_body(["# TYPE ", Name, " info\n"], nofin, Req);
             {_, false} ->
                 cowboy_req:stream_body(["# TYPE ", Name, " unknown\n"], nofin, Req);
             {_, true} ->
@@ -108,6 +110,8 @@ deliver_mapped_metric(Req, Type, Name, [{Tags, Value} | Tail]) ->
             cowboy_req:stream_body([Name, "_total", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
         {histogram, _} ->
             cowboy_req:stream_body([Name, "_bucket", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
+        {info, _} ->
+            cowboy_req:stream_body([Name, "_info", TagString, " ", strnum(Value), "\n"], nofin, Req);
         {_, _} ->
             cowboy_req:stream_body([Name, TagString, " ", strnum(Value), "\n"], nofin, Req)
     end,
