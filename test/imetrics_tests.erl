@@ -97,6 +97,21 @@ badarg_test(_Fixture) ->
         ?_assertEqual({error,{badarg,check_ets}}, imetrics:set_gauge_m(atom_gm, k, 1.5))
     ].
 
+info_test_() ->
+    {setup, fun start/0,
+        fun stop/1,
+        fun info_test/1}.
+
+info_test(_Fixture) ->
+    [
+        ?_assertEqual(true, imetrics:set_info(empty_map, #{})),
+        ?_assertEqual(true, imetrics:set_info(simple_map, #{elem_1 => val_1})),
+        ?_assertEqual(true, imetrics:set_info(simple_map, #{elem_1 => val_2})),
+        ?_assertEqual([{<<"empty_map">>, {info, [{#{}, 1}]}}, {<<"simple_map">>, {info, [{#{elem_1 => <<"val_2">>}, 1}]}}], imetrics:get_with_types()),
+        ?_assertEqual(true, imetrics:set_info(simple_map, #{elem_1 => val_3, elem_2 => val_1})),
+        ?_assertEqual([{<<"empty_map">>, {info, [{#{}, 1}]}}, {<<"simple_map">>, {info, [{#{elem_1 => <<"val_3">>, elem_2 => <<"val_1">>}, 1}]}}], imetrics:get_with_types())
+    ].
+
 %%exemplar tests
 exemplar_test_() ->
     {setup,

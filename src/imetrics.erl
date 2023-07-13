@@ -2,7 +2,7 @@
 
 -include("../include/imetrics.hrl").
 
--export([add/1, add/2, add/3, set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5, add_m/2, add_m/3]).
+-export([add/1, add/2, add/3, set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5, set_exemplar/6, add_m/2, add_m/3, set_info/2]).
 
 -export([set_gauge/2, set_gauge/3, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge/3, update_gauge_m/3]).
 
@@ -56,26 +56,50 @@ add(Name, Tags, Value) ->
     ).
 
 set_exemplar(Name, EValue) ->
-    set_exemplar(Name, #{}, EValue, #{}, erlang:system_time(millisecond)/1000).
+    set_exemplar(Name, #{}, EValue, #{}, erlang:system_time(millisecond)/1000, counter).
+
 set_exemplar(Name, Tags, EValue) when is_map(Tags) ->
-    set_exemplar(Name, Tags, EValue, #{}, erlang:system_time(millisecond)/1000);
+    set_exemplar(Name, Tags, EValue, #{}, erlang:system_time(millisecond)/1000, counter);
 set_exemplar(Name, EValue, Labels) when is_map(Labels) ->
-    set_exemplar(Name, #{}, EValue, Labels, erlang:system_time(millisecond)/1000);
+    set_exemplar(Name, #{}, EValue, Labels, erlang:system_time(millisecond)/1000, counter);
 set_exemplar(Name, EValue, Timestamp) when is_number(Timestamp) ->
-    set_exemplar(Name, #{}, EValue, #{}, Timestamp).
-set_exemplar(Name, Tags, EValue, Labels) when is_map(Tags), is_map(Labels) ->
-    set_exemplar(Name, Tags, EValue, Labels, erlang:system_time(millisecond)/1000);
+    set_exemplar(Name, #{}, EValue, #{}, Timestamp, counter);
+set_exemplar(Name, EValue, Type) ->
+    set_exemplar(Name, #{}, EValue, #{}, erlang:system_time(millisecond)/1000, Type).
+
+set_exemplar(Name, Tags, EValue, Labels) when is_map(Labels) ->
+    set_exemplar(Name, Tags, EValue, Labels, erlang:system_time(millisecond)/1000, counter);
 set_exemplar(Name, Tags, EValue, Timestamp) when is_map(Tags), is_number(Timestamp) ->
-    set_exemplar(Name, Tags, EValue, #{}, Timestamp);
-set_exemplar(Name, EValue, Labels, Timestamp) when is_map(Labels) ->
-    set_exemplar(Name, #{}, EValue, Labels, Timestamp).
+    set_exemplar(Name, Tags, EValue, #{}, Timestamp, counter);
+set_exemplar(Name, Tags, EValue, Type) when is_map(Tags) ->
+    set_exemplar(Name, Tags, EValue, #{}, erlang:system_time(millisecond)/1000, Type);
+set_exemplar(Name, EValue, Labels, Timestamp) when is_number(Timestamp) ->
+    set_exemplar(Name, #{}, EValue, Labels, Timestamp, counter);
+set_exemplar(Name, EValue, Labels, Type) when is_map(Labels) ->
+    set_exemplar(Name, #{}, EValue, Labels, erlang:system_time(millisecond)/1000, Type);
+set_exemplar(Name, EValue, Timestamp, Type) ->
+    set_exemplar(Name, #{}, EValue, #{}, Timestamp, Type).
+
+set_exemplar(Name, Tags, EValue, Labels, Timestamp) when is_number(Timestamp) ->
+    set_exemplar(Name, Tags, EValue, Labels, Timestamp, counter);
+set_exemplar(Name, Tags, EValue, Labels, Type) when is_map(Labels) ->
+    set_exemplar(Name, Tags, EValue, Labels, erlang:system_time(millisecond)/1000, Type);
+set_exemplar(Name, Tags, EValue, Timestamp, Type) when is_number(EValue) ->
+    set_exemplar(Name, Tags, EValue, #{}, Timestamp, Type);
+set_exemplar(Name, EValue, Labels, Timestamp, Type) ->
+    set_exemplar(Name, #{}, EValue, Labels, Timestamp, Type).
     
-set_exemplar(Name, Tags, EValue, Labels, Timestamp) ->
+set_exemplar(Name, Tags, EValue, Labels, Timestamp, Type) ->
     ?CATCH_KNOWN_EXC(
         begin
-            BinList = imetrics_utils:bin(Labels),
-            TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name }),
-            ets:insert(imetrics_exemplars, {TagsWithName, EValue, BinList, Timestamp})
+            case Type of
+                histogram ->
+                    imetrics_hist_openmetrics:set_exemplar(Name, Tags, EValue, Labels, Timestamp);
+                counter ->
+                    BinList = imetrics_utils:bin(Labels),
+                    TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name }),
+                    ets:insert(imetrics_exemplars, {TagsWithName, EValue, BinList, Timestamp})
+            end
         end
     ).
 
@@ -127,6 +151,9 @@ set_counter_dimension(Name, Value) ->
        end
       ).
 
+set_info(Name, Tags) ->
+    ets:insert(imetrics_info, {imetrics_utils:bin(Name), [{imetrics_utils:bin(Tags), 1}]}).
+
 register_slo(UIdName, Opts) ->
     imetrics_sup:register_slo(UIdName, Opts).
 
@@ -171,7 +198,7 @@ set_stats(Name, Stats) ->
 
 hist(Name, Buckets) ->
    imetrics_hist_openmetrics:new(Name, Buckets).
-hist(Name, Tags, Buckets) when is_map(tags) ->
+hist(Name, Tags, Buckets) when is_map(Tags) ->
    imetrics_hist_openmetrics:new(Name, Tags, Buckets);
 hist(Name, Range=[_Min, _Max], NumBuckets) when is_integer(NumBuckets) ->
     imetrics_hist_openmetrics:new(Name, Range, NumBuckets).
@@ -255,11 +282,12 @@ get() ->
     Metrics3.
 
 get_with_types() ->
+    Info = [{MetricName, {info, MetricPoints}} || {MetricName, MetricPoints} <- get_unmapped(imetrics_info)],
     Counters = [{MetricName, {counter, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_counters)],
     Gauges = [{MetricName, {gauge, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_gauges)],
     Stats = [{MetricName, {stat, MetricPoints}} || {MetricName, MetricPoints} <- get_unmapped(imetrics_stats)],
     Histograms = [{MetricName, {histogram, MetricPoints}} || {MetricName, MetricPoints} <- imetrics_hist_openmetrics:get_all()],
-    Counters ++ Gauges ++ Stats ++ Histograms.
+    Info ++ Counters ++ Gauges ++ Stats ++ Histograms.
 
 get_counters() ->
     Counters = get_mapped(imetrics_counters),

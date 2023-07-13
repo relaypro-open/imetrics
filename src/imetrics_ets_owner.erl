@@ -34,6 +34,7 @@ init([]) ->
     ets:new(imetrics_hist_openmetrics, [public, named_table]),
     ets:new(imetrics_vm_metrics, [public, named_table]),
     ets:new(imetrics_exemplars, [public, named_table]),
+    ets:new(imetrics_info, [public, named_table]),
 
     {ok, #{  }}.
 

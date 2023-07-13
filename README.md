@@ -133,15 +133,23 @@ If exemplars are not updated between queries, additional copies of the exemplar 
 so creating exemplars on infrequent events will not result in overpopulation of the data set.
 Additionally, whenever `set_exemplar` is called, the previous exemplar associated with the given
 name and tags will be overwritten, meaning only the most recently passed exemplar will be stored at any given time.
-`imetrics:set_exemplar` does not check to see if the added exemplar is associated with any actual values, and will always return true. `imetrics_hist_openmetrics:set_exemplar`, the function for adding exemplars to histograms works slightly differently, in that the value provided for the exemplar determines which bucket it is associated with in the histogram, and if the function is called for a histogram/tag combination that does not exist, this function will return `{error, {badarg, check_ets}}`.
+`imetrics:set_exemplar`, when called without a type identifier, or when called with a type of `counter`, does not check to see if the added exemplar is associated with any actual values, and will always return true. `imetrics_hist_openmetrics:set_exemplar`, or `imetrics:set_exemplar` with type `histogram`, works slightly differently, in that the value provided for the exemplar determines which bucket it is associated with in the histogram, and if the function is called for a histogram/tag combination that does not exist, this function will return `{error, {badarg, check_ets}}`.
 ```erlang
 %Minimal set_exemplar
 imetrics:set_exemplar(http_responses, 1),
 %set_exemplar with all details included
-imetrics:set_exemplar(http_responses, #{ code => "404" }, 1, #{traceid => "oHg5SJYRHA0"}, 1684267027.342),
+imetrics:set_exemplar(http_responses, #{ code => "404" }, 1, #{traceid => "oHg5SJYRHA0"}, 1684267027.342, counter),
 
 %Setting an exemplar on a histogram:
-imetrics_hist_openmetrics:set_exemplar(http_response_times, #{code => "408"}, 15.3).
+imetrics_hist_openmetrics:set_exemplar(http_response_times, #{code => "408"}, 15.3),
+imetrics:set_exemplar(http_response_times, #{code => "400"}, 23, histogram).
+```
+
+### Info ###
+The OpenMetrics standard specifies the Info type as a way to expose textual information that is expected to remain constant while a program is running, for example, a version number, a revision control commit, or a compiler version. imetrics supports info metrics with the `set_info` function, which takes two arguments: a Name, and a map of tags to represent the data to be exposed. Info metrics are unique based on Name, so any time `set_info` is called for a given name, the previous entry bearing that name will be overwritten with the new map.
+
+```erlang
+imetrics:set_info(server, #{version => "1.7.10", otp => "25.2"}).
 ```
 
 ### Allowed types ###
