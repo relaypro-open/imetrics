@@ -323,9 +323,22 @@ get_slo(UIdName, UId) ->
 
 call_metrics_fun(Fun, Default) ->
     try
-        Fun()
+        % we start the metrics function in a separate process
+        % to ensure we can continue if it doesn't return its
+        % value in a reasonable time
+        ParentPid = self(),
+        spawn(fun() ->
+            ParentPid ! {metrics_fun, Fun(), self()}
+        end),
+
+        % after 5 seconds, return the default value
+        receive
+            {metrics_fun, Result, _Sender} -> Result
+        after 5000 ->
+            Default
+        end
     catch _:_ ->
-              Default
+        Default
     end.
 
 get_unmapped(T) ->
