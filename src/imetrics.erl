@@ -322,31 +322,26 @@ get_slo(UIdName, UId) ->
 %% ---
 
 call_metrics_fun(Name, Fun, Default) ->
-    try
-        % we start the metrics function in a separate process
-        % to ensure we can continue if it doesn't return its
-        % value in a reasonable time
-        ParentPid = self(),
-        spawn_link(fun() ->
-            try 
-                ParentPid ! {metrics_fun, Fun(), self()}
-            catch _:_ ->
-                add(imetrics_metric_fun_error, #{ metric => Name }),
-                ParentPid ! {metrics_fun, Default, self()}
-            end
-        end),
-
-        % after 5 seconds, return the default value
-        receive
-            {metrics_fun, Result, _Sender} -> Result
-        after 5000 ->
-            add(imetrics_metric_fun_timeout, #{ metric => Name }),
-            Default
+    % we start the metrics function in a separate process
+    % to ensure we can continue if it doesn't return its
+    % value in a reasonable time
+    ParentPid = self(),
+    spawn_link(fun() ->
+        try 
+            ParentPid ! {metrics_fun, Fun(), self()}
+        catch _:_ ->
+            add(imetrics_metric_fun_error, #{ metric => Name }),
+            ParentPid ! {metrics_fun, Default, self()}
         end
-    catch _:_ ->
-        add(imetrics_metric_fun_spawn_error, #{ metric => Name }),
+    end),
+
+    % after 5 seconds, return the default value
+    receive
+        {metrics_fun, Result, _Sender} -> Result
+    after 5000 ->
+        add(imetrics_metric_fun_timeout, #{ metric => Name }),
         Default
-    end.
+    end
 
 get_unmapped(T) ->
     Acc = ets:foldl(fun({Name, Value}, Acc0) ->
