@@ -341,7 +341,7 @@ call_metrics_fun(Name, Fun, Default) ->
     after 5000 ->
         add(imetrics_metric_fun_timeout, #{ metric => Name }),
         Default
-    end
+    end.
 
 get_unmapped(T) ->
     Acc = ets:foldl(fun({Name, Value}, Acc0) ->
