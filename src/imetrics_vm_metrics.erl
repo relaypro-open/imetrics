@@ -13,8 +13,14 @@ metric_fun() ->
     Table = case (timer:now_diff(erlang:timestamp(), LastUpdateTime) div 1000) > timer:seconds(55) of
         true ->
             [
-                [{MaxMQueuePid, MaxMQueueLen, _}|_],
-                [{MaxMemoryPid, MaxMemory, _}|_]
+                [{MaxMQueuePid, MaxMQueueLen, [
+                    {current_function, MaxMQueueCurrentFunc},
+                    {initial_call, MaxMQueueInitialCall}|_
+                ]}|_],
+                [{MaxMemoryPid, MaxMemory, [
+                    {current_function, MaxMemoryCurrentFunc},
+                    {initial_call, MaxMemoryInitialCall}|_
+                ]}|_]
             ] = proc_count([
                 message_queue_len,
                 memory
@@ -22,13 +28,13 @@ metric_fun() ->
 
             % if the memory is > 512MB, log the PID to console
             case MaxMemory > 512000000 of
-                true -> logger:info("Max Memory PID: ~p", [MaxMemoryPid]);
+                true -> logger:info("Max Memory PID: ~p, current_function: ~p, initial_call: ~p", [MaxMemoryPid, MaxMemoryCurrentFunc, MaxMemoryInitialCall]);
                 false -> noop
             end,
 
             % if a process has more than 50 messages, log the PID
             case MaxMQueueLen > 50 of
-                true -> logger:info("Max Message Queue PID: ~p", [MaxMQueuePid]);
+                true -> logger:info("Max Message Queue PID: ~p, current_function: ~p, initial_call: ~p", [MaxMQueuePid, MaxMQueueCurrentFunc, MaxMQueueInitialCall]);
                 false -> noop
             end,
 
@@ -37,6 +43,7 @@ metric_fun() ->
                 {max_memory, MaxMemory},
                 {atom_count, erlang:system_info(atom_count)},
                 {atom_limit, erlang:system_info(atom_limit)},
+                {process_count, erlang:system_info(process_count)},
                 {last_update_time, erlang:timestamp()}
             ],
             ets:insert(imetrics_vm_metrics, Objects),

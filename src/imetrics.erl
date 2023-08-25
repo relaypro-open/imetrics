@@ -321,16 +321,31 @@ get_slo(UIdName, UId) ->
     
 %% ---
 
-call_metrics_fun(Fun, Default) ->
-    try
-        Fun()
-    catch _:_ ->
-              Default
+call_metrics_fun(Name, Fun, Default) ->
+    % we start the metrics function in a separate process
+    % to ensure we can continue if it doesn't return its
+    % value in a reasonable time
+    ParentPid = self(),
+    spawn_link(fun() ->
+        try 
+            ParentPid ! {metrics_fun, Fun(), self()}
+        catch _:_ ->
+            add(imetrics_metric_fun_error, #{ metric => Name }),
+            ParentPid ! {metrics_fun, Default, self()}
+        end
+    end),
+
+    % after 5 seconds, return the default value
+    receive
+        {metrics_fun, Result, _Sender} -> Result
+    after 5000 ->
+        add(imetrics_metric_fun_timeout, #{ metric => Name }),
+        Default
     end.
 
 get_unmapped(T) ->
     Acc = ets:foldl(fun({Name, Value}, Acc0) ->
-                Value2 = if is_function(Value) -> call_metrics_fun(Value, -1);
+                Value2 = if is_function(Value) -> call_metrics_fun(Name, Value, -1);
                     true -> Value
                 end,
                 [{Name, Value2}|Acc0]
@@ -341,7 +356,7 @@ get_unmapped(T) ->
 get_mapped(T) ->
     MappedDict = ets:foldl(
                    fun({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key('_multigauge', Tags) ->
-                           Value2 = if is_function(Value) -> call_metrics_fun(Value, -1);
+                           Value2 = if is_function(Value) -> call_metrics_fun(Name, Value, -1);
                                        true -> Value
                                     end,
 
@@ -359,7 +374,7 @@ get_mapped(T) ->
                       ({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) when is_function(Value) ->
                            % multigauge support
                            [{Name, Dimension}] = ets:lookup(imetrics_map_keys, Name),
-                           List = call_metrics_fun(Value, []),
+                           List = call_metrics_fun(Name, Value, []),
                            List2 = lists:map(fun({K0, V0}) -> {#{ list_to_atom(binary_to_list(Dimension)) => imetrics_utils:bin(K0)}, V0} end, List),
                            orddict:append_list(Name, List2, MappedDict0);
                       (_, MappedDict0) ->
