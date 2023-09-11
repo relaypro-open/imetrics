@@ -13,14 +13,8 @@ metric_fun() ->
     Table = case (timer:now_diff(erlang:timestamp(), LastUpdateTime) div 1000) > timer:seconds(55) of
         true ->
             [
-                [{MaxMQueuePid, MaxMQueueLen, [
-                    {current_function, MaxMQueueCurrentFunc},
-                    {initial_call, MaxMQueueInitialCall}|_
-                ]}|_],
-                [{MaxMemoryPid, MaxMemory, [
-                    {current_function, MaxMemoryCurrentFunc},
-                    {initial_call, MaxMemoryInitialCall}|_
-                ]}|_]
+                [{MaxMQueuePid, MaxMQueueLen, MaxMQueueProps}|_],
+                [{MaxMemoryPid, MaxMemory, MaxMemoryProps}|_]
             ] = proc_count([
                 message_queue_len,
                 memory
@@ -28,14 +22,34 @@ metric_fun() ->
 
             % if the memory is > 512MB, log the PID to console
             case MaxMemory > 512000000 of
-                true -> logger:info("Max Memory PID: ~p, current_function: ~p, initial_call: ~p", [MaxMemoryPid, MaxMemoryCurrentFunc, MaxMemoryInitialCall]);
-                false -> noop
+                true ->
+                    MaxMemoryCurrentFunc = proplists:get_value(current_function, MaxMemoryProps, unknown_current_function),
+                    MaxMemoryInitialCall = proplists:get_value(initial_call, MaxMemoryProps, unknown_initial_call),
+                    MaxMemoryRegisteredName = proplists:get_value(registered_name, MaxMemoryProps, unknown_registered_name),
+                    logger:info("Max Memory PID: ~p, current_function: ~w, registered_name: ~w, initial_call: ~w", [
+                        MaxMemoryPid,
+                        MaxMemoryCurrentFunc,
+                        MaxMemoryRegisteredName,
+                        MaxMemoryInitialCall
+                    ]);
+                false ->
+                    noop
             end,
 
             % if a process has more than 50 messages, log the PID
             case MaxMQueueLen > 50 of
-                true -> logger:info("Max Message Queue PID: ~p, current_function: ~p, initial_call: ~p", [MaxMQueuePid, MaxMQueueCurrentFunc, MaxMQueueInitialCall]);
-                false -> noop
+                true ->
+                    MaxMQueueCurrentFunc = proplists:get_value(current_function, MaxMQueueProps, unknown_current_function),
+                    MaxMQueueInitialCall = proplists:get_value(initial_call, MaxMQueueProps, unknown_initial_call),
+                    MaxMQueueRegisteredName = proplists:get_value(registered_name, MaxMQueueProps, unknown_registered_name),
+                    logger:info("Max Message Queue PID: ~p, current_function: ~w, registered_name: ~w, initial_call: ~w", [
+                        MaxMQueuePid,
+                        MaxMQueueCurrentFunc,
+                        MaxMQueueRegisteredName,
+                        MaxMQueueInitialCall
+                    ]);
+                false ->
+                    noop
             end,
 
             Objects = [
@@ -79,7 +93,7 @@ proc_attrs(AttrList) ->
 proc_attrs(AttrList, Pid) ->
     case process_info(Pid, AttrList) of
         [{registered_name,Name}, Init, Cur|Results] ->
-            {ok, {Pid, Results, [Name || is_atom(Name)]++[Init, Cur]}};
+            {ok, {Pid, Results, [{registered_name, Name} || is_atom(Name)]++[Init, Cur]}};
         undefined ->
             {error, undefined}
     end.
