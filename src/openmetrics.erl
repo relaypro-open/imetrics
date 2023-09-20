@@ -100,24 +100,18 @@ is_valid_labels(Labels) ->
 
 % valid label names start with a letter and may contain letters and numbers
 is_valid_label_name(LabelName) ->
-    Result = case re:run(binary:bin_to_list(imetrics_utils:bin(LabelName)), <<"^[a-zA-Z_][a-zA-Z0-9_]*$">>) of
+    case re:run(binary:bin_to_list(imetrics_utils:bin(LabelName)), <<"^[a-zA-Z_][a-zA-Z0-9_]*$">>, [{capture, none}]) of
         match -> true;
-        {match, _} -> true;
         _ -> false
-    end,
-    logger:debug("is_valid_label_name(\"~s\") -> ~w", [binary:bin_to_list(imetrics_utils:bin(LabelName)), Result]),
-    Result.
+    end.
 
 % valid label values do not include double quotes, backslashes, or newlines
 % (technically these can be escaped, but writing that logic is more complex)
 is_valid_label_value(LabelValue) ->
-    Result = case re:run(binary:bin_to_list(LabelValue), <<"^[^\n\"\\\\]*$">>) of
+    case re:run(binary:bin_to_list(LabelValue), <<"^[^\n\"\\\\]*$">>, [{capture, none}]) of
         match -> true;
-        {match, _} -> true;
         _ -> false
-    end,
-    logger:debug("is_valid_label_value(\"~s\") -> ~w", [binary:bin_to_list(LabelValue), Result]),
-    Result.
+    end.
 
 deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
     case Key of
