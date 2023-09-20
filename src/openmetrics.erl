@@ -73,9 +73,14 @@ get_exemplar_string(Name, Tags) ->
     TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name }),
     case imetrics:get_exemplar(TagsWithName) of
         {EValue, Labels, Timestamp} ->
-            EStr = strnum(EValue),
-            TStr = strnum(Timestamp),
-            " # {" ++ create_label_string(Labels) ++ "} " ++ EStr ++ " " ++ TStr;
+            case is_valid_labels(Labels) of
+                true ->
+                    EStr = strnum(EValue),
+                    TStr = strnum(Timestamp),
+                    " # {" ++ create_label_string(Labels) ++ "} " ++ EStr ++ " " ++ TStr;
+                false ->
+                    ""
+            end;
         undefined ->
             ""
     end.
@@ -88,6 +93,24 @@ create_label_string(Labels) ->
         _ ->
             [_| Result2] = Result,
             Result2
+    end.
+
+is_valid_labels(Labels) ->
+    maps:fold(fun(Label, Value, Valid) -> Valid and is_valid_label_name(Label) and is_valid_label_value(Value) end, true, Labels).
+
+% valid label names start with a letter and may contain letters and numbers
+is_valid_label_name(LabelName) ->
+    case re:run(binary:bin_to_list(imetrics_utils:bin(LabelName)), <<"^[a-zA-Z_][a-zA-Z0-9_]*$">>, [{capture, none}]) of
+        match -> true;
+        _ -> false
+    end.
+
+% valid label values do not include double quotes, backslashes, or newlines
+% (technically these can be escaped, but writing that logic is more complex)
+is_valid_label_value(LabelValue) ->
+    case re:run(binary:bin_to_list(LabelValue), <<"^[^\n\"\\\\]*$">>, [{capture, none}]) of
+        match -> true;
+        _ -> false
     end.
 
 deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
