@@ -332,7 +332,7 @@ call_metrics_fun(Name, Fun, Default) ->
         catch _:_ ->
             add(imetrics_metric_fun_error, #{ metric => Name }),
             Default
-        end
+        end,
 
         % before we send our result, make sure we haven't been terminated
         receive
