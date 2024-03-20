@@ -1,73 +1,102 @@
 -module(imetrics_vm_metrics).
+-behavior(gen_server).
+-export([start_link/0]).
+-export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
 -export([install/0, proc_count/2]).
+-define(RefreshInterval, 60000). % 60 seconds
 
-install() ->
-    imetrics:set_multigauge(erlang_vm, vm_metric, fun metric_fun/0).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
-metric_fun() ->
-    LastUpdateTime = case ets:lookup(imetrics_vm_metrics, last_update_time) of
-        [{last_update_time, T}] -> T;
-        [] -> {0,0,0}
-    end,
+init(_) ->
+    State = #{
+        installed => false
+    },
+    {ok, State}.
 
-    Table = case (timer:now_diff(erlang:timestamp(), LastUpdateTime) div 1000) > timer:seconds(55) of
+handle_info(refresh_gauges, State) ->
+    [
+        [{MaxMQueuePid, MaxMQueueLen, MaxMQueueProps}|_],
+        [{MaxMemoryPid, MaxMemory, MaxMemoryProps}|_]
+    ] = proc_count([
+        message_queue_len,
+        memory
+    ], 1),
+
+    % if the memory is > 512MB, log the PID to console
+    case MaxMemory > 512000000 of
         true ->
-            [
-                [{MaxMQueuePid, MaxMQueueLen, MaxMQueueProps}|_],
-                [{MaxMemoryPid, MaxMemory, MaxMemoryProps}|_]
-            ] = proc_count([
-                message_queue_len,
-                memory
-            ], 1),
-
-            % if the memory is > 512MB, log the PID to console
-            case MaxMemory > 512000000 of
-                true ->
-                    MaxMemoryCurrentFunc = proplists:get_value(current_function, MaxMemoryProps, unknown_current_function),
-                    MaxMemoryInitialCall = proplists:get_value(initial_call, MaxMemoryProps, unknown_initial_call),
-                    MaxMemoryRegisteredName = proplists:get_value(registered_name, MaxMemoryProps, unknown_registered_name),
-                    logger:info("Max Memory PID: ~p, current_function: ~w, registered_name: ~w, initial_call: ~w", [
-                        MaxMemoryPid,
-                        MaxMemoryCurrentFunc,
-                        MaxMemoryRegisteredName,
-                        MaxMemoryInitialCall
-                    ]);
-                false ->
-                    noop
-            end,
-
-            % if a process has more than 50 messages, log the PID
-            case MaxMQueueLen > 50 of
-                true ->
-                    MaxMQueueCurrentFunc = proplists:get_value(current_function, MaxMQueueProps, unknown_current_function),
-                    MaxMQueueInitialCall = proplists:get_value(initial_call, MaxMQueueProps, unknown_initial_call),
-                    MaxMQueueRegisteredName = proplists:get_value(registered_name, MaxMQueueProps, unknown_registered_name),
-                    logger:info("Max Message Queue PID: ~p, current_function: ~w, registered_name: ~w, initial_call: ~w", [
-                        MaxMQueuePid,
-                        MaxMQueueCurrentFunc,
-                        MaxMQueueRegisteredName,
-                        MaxMQueueInitialCall
-                    ]);
-                false ->
-                    noop
-            end,
-
-            Objects = [
-                {max_message_queue_len, MaxMQueueLen},
-                {max_memory, MaxMemory},
-                {atom_count, erlang:system_info(atom_count)},
-                {atom_limit, erlang:system_info(atom_limit)},
-                {process_count, erlang:system_info(process_count)},
-                {last_update_time, erlang:timestamp()}
-            ],
-            ets:insert(imetrics_vm_metrics, Objects),
-            Objects;
+            MaxMemoryCurrentFunc = proplists:get_value(current_function, MaxMemoryProps, unknown_current_function),
+            MaxMemoryInitialCall = proplists:get_value(initial_call, MaxMemoryProps, unknown_initial_call),
+            MaxMemoryRegisteredName = proplists:get_value(registered_name, MaxMemoryProps, unknown_registered_name),
+            logger:info("Max Memory PID: ~p, current_function: ~w, registered_name: ~w, initial_call: ~w", [
+                MaxMemoryPid,
+                MaxMemoryCurrentFunc,
+                MaxMemoryRegisteredName,
+                MaxMemoryInitialCall
+            ]);
         false ->
-            ets:tab2list(imetrics_vm_metrics)
+            noop
     end,
 
-    Metrics = lists:keydelete(last_update_time, 1, Table),
-    Metrics.
+    % if a process has more than 50 messages, log the PID
+    case MaxMQueueLen > 50 of
+        true ->
+            MaxMQueueCurrentFunc = proplists:get_value(current_function, MaxMQueueProps, unknown_current_function),
+            MaxMQueueInitialCall = proplists:get_value(initial_call, MaxMQueueProps, unknown_initial_call),
+            MaxMQueueRegisteredName = proplists:get_value(registered_name, MaxMQueueProps, unknown_registered_name),
+            logger:info("Max Message Queue PID: ~p, current_function: ~w, registered_name: ~w, initial_call: ~w", [
+                MaxMQueuePid,
+                MaxMQueueCurrentFunc,
+                MaxMQueueRegisteredName,
+                MaxMQueueInitialCall
+            ]);
+        false ->
+            noop
+    end,
+
+    AtomCount = erlang:system_info(atom_count),
+    AtomLimit = erlang:system_info(atom_limit),
+    ProcessCount = erlang:system_info(process_count),
+
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => max_message_queue_len }, MaxMQueueLen),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => max_memory }, MaxMemory),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => atom_count }, AtomCount),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => atom_limit }, AtomLimit),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => process_count }, ProcessCount),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => last_update_time }, erlang:timestamp()),
+
+    % recalculate after the interval time has passed
+    erlang:send_after(?RefreshInterval, self(), refresh_gauges),
+
+    % We don't need to reply nor update the state.
+    {noreply, State};
+% for any other infos, fail
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+% for any other casts, fail.
+handle_cast(_Cast, _State) ->
+    erlang:error(function_clause).
+
+% only allow the server to be "installed" once
+handle_call(install, _From, #{ installed := false }) ->
+    self() ! refresh_gauges,
+    {reply, ok, #{ installed => true }};
+handle_call(install, _From, State) ->
+    {reply, already_installed, State};
+handle_call(_Call, _From, _State) ->
+    erlang:error(function_clause).
+
+terminate(_Reason, _State) ->
+    ok.
+
+code_change(_OldVsn, State, _Extras) ->
+    {ok, State}.
+
+% designed to be called only once
+install() ->
+    gen_server:call(?MODULE, install).
 
 % A modification of recon:proc_count that allows you to fetch multiple
 % attributes without calling process_info multiple times.

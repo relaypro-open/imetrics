@@ -326,18 +326,22 @@ call_metrics_fun(Name, Fun, Default) ->
     % to ensure we can continue if it doesn't return its
     % value in a reasonable time
     ParentPid = self(),
+    Ref = make_ref(),
     spawn_link(fun() ->
-        try 
-            ParentPid ! {metrics_fun, Fun(), self()}
+        ReturnValue = try
+            Fun()
         catch _:_ ->
             add(imetrics_metric_fun_error, #{ metric => Name }),
-            ParentPid ! {metrics_fun, Default, self()}
-        end
+            Default
+        end,
+
+        ParentPid ! {Ref, metrics_fun, ReturnValue}
     end),
 
-    % after 5 seconds, return the default value
+    % wait for the function to return
     receive
-        {metrics_fun, Result, _Sender} -> Result
+        {Ref, metrics_fun, Result} -> Result
+    % after 5 seconds, return the default value and signal to cancel the request
     after 5000 ->
         add(imetrics_metric_fun_timeout, #{ metric => Name }),
         Default
