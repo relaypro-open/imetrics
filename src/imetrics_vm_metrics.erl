@@ -14,7 +14,7 @@ init(_) ->
     },
     {ok, State}.
 
-handle_cast(refresh_gauges, State) ->
+handle_info(refresh_gauges, State) ->
     [
         [{MaxMQueuePid, MaxMQueueLen, MaxMQueueProps}|_],
         [{MaxMemoryPid, MaxMemory, MaxMemoryProps}|_]
@@ -67,25 +67,26 @@ handle_cast(refresh_gauges, State) ->
     imetrics:set_gauge(erlang_vm, #{ vm_metric => last_update_time }, erlang:timestamp()),
 
     % recalculate after the interval time has passed
-    erlang:send_after(?RefreshInterval, self(), {'$gen_cast', refresh_gauges}),
+    erlang:send_after(?RefreshInterval, self(), refresh_gauges),
 
     % We don't need to reply nor update the state.
     {noreply, State};
+% for any other infos, fail
+handle_info(_Info, State) ->
+    {noreply, State}.
+
 % for any other casts, fail.
 handle_cast(_Cast, _State) ->
     erlang:error(function_clause).
 
 % only allow the server to be "installed" once
 handle_call(install, _From, #{ installed := false }) ->
-    gen_server:cast(?MODULE, refresh_gauges),
+    self() ! refresh_gauges,
     {reply, ok, #{ installed => true }};
 handle_call(install, _From, State) ->
     {reply, already_installed, State};
 handle_call(_Call, _From, _State) ->
     erlang:error(function_clause).
-
-handle_info(_Info, State) ->
-    {noreply, State}.
 
 terminate(_Reason, _State) ->
     ok.
