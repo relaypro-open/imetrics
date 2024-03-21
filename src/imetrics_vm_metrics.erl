@@ -64,7 +64,7 @@ handle_info(refresh_gauges, State) ->
     imetrics:set_gauge(erlang_vm, #{ vm_metric => atom_count }, AtomCount),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => atom_limit }, AtomLimit),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => process_count }, ProcessCount),
-    imetrics:set_gauge(erlang_vm, #{ vm_metric => last_update_time }, erlang:timestamp()),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => last_update_time }, os:system_time(second)),
 
     % recalculate after the interval time has passed
     erlang:send_after(?RefreshInterval, self(), refresh_gauges),

@@ -21,7 +21,9 @@ get(Req) ->
                 [
                     {MetricName, MetricPoints}
                  || {MetricName, {Type, MetricPoints}} <- imetrics:get_with_types(),
-                    not ((Type =:= counter) or (Type =:= gauge))
+                    % as new types of metrics are added to openmetrics.erl, they should be added
+                    % to the exclusion list below:
+                    not ((Type =:= counter) or (Type =:= gauge) or (Type =:= histogram) or (Type =:= info))
                 ]
             end)
     end.

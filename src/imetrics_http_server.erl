@@ -110,6 +110,7 @@ start_server(Port) ->
     ).
 
 handle_info({'EXIT', _From, Reason}, State) ->
+    io:format("imetrics_http_server trapped EXIT for reason ~p~n", [Reason]),
     {stop, Reason, State}.
 
 terminate(_Reason, _State = #state{cowboy_pid = Pid}) when is_pid(Pid) ->
