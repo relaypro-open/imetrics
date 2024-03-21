@@ -18,9 +18,10 @@ http_test_() ->
         fun http_test/1}. 
 
 start_http() ->
+    F = start(),
     ok = imetrics_http_server:await(1000),
     {ok, Port} = imetrics_http_server:port(),
-    #{port => Port}.
+    F#{port => Port}.
 
 http_test(#{port := Port}) ->
     http_test_blank(#{port => Port}) ++
@@ -43,6 +44,8 @@ http_test_blank(#{port := Port}) ->
 
 http_test_vm_metrics(#{port := Port}) ->
     imetrics_vm_metrics:install(),
+
+    timer:sleep(1000), % sleep for 1 second to allow the vm_metrics to populate
 
     Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
     {ok, {Status1, _Headers1, Body1}} = 
