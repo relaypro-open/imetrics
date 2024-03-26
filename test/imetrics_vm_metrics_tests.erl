@@ -43,22 +43,24 @@ http_test_blank(#{port := Port}) ->
     ].
 
 http_test_vm_metrics(#{port := Port}) ->
+    % reduce to 5 seconds from the default of 60s
+    application:set_env(imetrics, vm_metrics_refresh_interval, 5_000),
     imetrics_vm_metrics:install(),
 
-    timer:sleep(1000), % sleep for 1 second to allow the vm_metrics to populate
+    timer:sleep(1_000), % sleep for 1 second to allow the vm_metrics to populate
 
     Url = "http://localhost:"++integer_to_list(Port)++"/metrics",
     {ok, {Status1, _Headers1, Body1}} = 
         httpc:request(get, {Url, []}, [], []),
     {_Vsn1, Code1, _Friendly1} = Status1,
 
-    timer:sleep(60000), % sleep for 60 seconds for the metrics to update
+    timer:sleep(6_000), % sleep for 6 seconds for the metrics to update
 
     {ok, {Status2, _Headers2, Body2}} = 
         httpc:request(get, {Url, []}, [], []),
     {_Vsn2, Code2, _Friendly2} = Status2,
 
-    timer:sleep(10000), % sleep for 10 seconds, we don't expect the metrics to update
+    timer:sleep(1_000), % sleep for 1 second, we don't expect the metrics to update
 
     {ok, {Status3, _Headers3, Body3}} = 
         httpc:request(get, {Url, []}, [], []),

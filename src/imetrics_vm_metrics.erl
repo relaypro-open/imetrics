@@ -3,7 +3,6 @@
 -export([start_link/0]).
 -export([init/1, handle_cast/2, handle_call/3, handle_info/2, terminate/2, code_change/3]).
 -export([install/0, proc_count/2]).
--define(RefreshInterval, 60000). % 60 seconds
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -66,8 +65,8 @@ handle_info(refresh_gauges, State) ->
     imetrics:set_gauge(erlang_vm, #{ vm_metric => process_count }, ProcessCount),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => last_update_time }, os:system_time(second)),
 
-    % recalculate after the interval time has passed
-    erlang:send_after(?RefreshInterval, self(), refresh_gauges),
+    % recalculate after the interval time has passed. default interval is 60 seconds.
+    erlang:send_after(application:get_env(imetrics, vm_metrics_refresh_interval, 60_000), self(), refresh_gauges),
 
     % We don't need to reply nor update the state.
     {noreply, State};
