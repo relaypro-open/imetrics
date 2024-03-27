@@ -36,6 +36,8 @@ deliver_data(Req, _Type = types, Data) ->
     lists:foreach(fun(Value) -> Func(Req, Value) end, Data).
 
 deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
+    % as new types of metrics are added to this case statement, they should be added
+    % to the exclusion list in varz.erl
     ShouldPrintMetric =
         case {Type, application:get_env(imetrics, strict_openmetrics_compat, false)} of
             {counter, _} ->
