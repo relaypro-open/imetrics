@@ -69,7 +69,7 @@ handle_info(refresh_gauges, State) ->
     erlang:send_after(application:get_env(imetrics, vm_metrics_refresh_interval, 60_000), self(), refresh_gauges),
 
     % We don't need to reply nor update the state.
-    {noreply, State};
+    {noreply, State, hibernate};
 % for any other infos, fail
 handle_info(_Info, State) ->
     {noreply, State}.
