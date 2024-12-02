@@ -275,11 +275,3 @@ Configuration
 | `strict_openmetrics_compat`   | `false`   | If set to `true`, metrics will only display on the old HTTP endpoint if they aren't compatible with the OpenMetrics endpoint. Metrics will only display on one endpoint or the other, never both. |
 | `openmetrics_exemplar_compat` | `false`   | If set to `true`, counters will display with _total appended to their end, and exemplars will be displayed for counters. When `false`, counters will not get the appended suffix, and exemplars will not be displayed on counters. |
 | `hist_max_buckets`            | `64`      | Upper limit on the number of buckets for histograms. Calls to create a histogram with more buckets than this value will fail. |
-
-## OpenMetrics conversion
-
-imetrics is currently undergoing an effort to update the format of metrics it
-serves over HTTP. The old format is still served at `/imetrics/varz:get`, and it
-is a simple plaintext representation of the metrics. Work is ongoing to convert this
-representation to the [OpenMetrics standard.](https://github.com/OpenObservability/OpenMetrics/blob/main/specification/OpenMetrics.md)
-This is currently served at `/metrics`, and work continues on the [`feature/openmetrics` branch](https://github.com/relaypro-open/imetrics/tree/feature/openmetrics).
