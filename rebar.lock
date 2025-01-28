@@ -12,5 +12,5 @@
   1},
  {<<"recon">>,
   {git,"https://github.com/ferd/recon.git",
-       {ref,"f7b6c08e6e9e2219db58bfb012c58c178822e01e"}},
+       {ref,"c2a76855be3a226a3148c0dfc21ce000b6186ef8"}},
   0}].
