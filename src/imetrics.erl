@@ -170,6 +170,16 @@ set_multigauge(Name, Dimension, Fun) when is_function(Fun)
            ets:insert(imetrics_gauges, {TagsWithName#{ '_multigauge' => true }, Fun}),
            Fun
        end
+      );
+set_multigauge(Name, Dimensions, Fun) when is_function(Fun) andalso is_tuple(Dimensions) ->
+    ?CATCH_KNOWN_EXC(
+       begin
+           NameBin = imetrics_utils:bin(Name),
+           TagsWithName = imetrics_utils:bin(#{ name => NameBin }),
+           ets:insert(imetrics_map_keys, {NameBin, Dimensions}),
+           ets:insert(imetrics_gauges, {TagsWithName#{ '_multigauge' => true }, Fun}),
+           Fun
+       end
       ).
 
 stats(Name) ->
@@ -358,34 +368,56 @@ get_unmapped(T) ->
     lists:reverse(Acc).
 
 get_mapped(T) ->
-    MappedDict = ets:foldl(
-                   fun({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key('_multigauge', Tags) ->
-                           Value2 = if is_function(Value) -> call_metrics_fun(Name, Value, -1);
-                                       true -> Value
-                                    end,
+    Dict = ets:foldl(fun get_mapped_/2, orddict:new(), T),
+    orddict:to_list(Dict).
 
-                           % if a dimension has been set on a mapped counter/gauge, rename 'map_key' to what that dimension is
-                           % this is for backwards compatibility, the suggested path is to set your tags yourself and not use a mapped counter
-                           Tags3 = case {maps:find(map_key, Tags), ets:lookup(imetrics_map_keys, Name)} of
-                                {{ok, _}, [{Name, Dimension}]} ->
-                                    {MapKeyValue, Tags2} = maps:take(map_key, Tags),
-                                    Tags2#{ list_to_atom(binary_to_list(Dimension)) => MapKeyValue };
-                                _ ->
-                                    Tags
-                                end,
-                           Tags4 = maps:remove(name, Tags3),
-                           orddict:append_list(Name, [{Tags4, Value2}], MappedDict0);
-                      ({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) when is_function(Value) ->
-                           % multigauge support
-                           [{Name, Dimension}] = ets:lookup(imetrics_map_keys, Name),
-                           List = call_metrics_fun(Name, Value, []),
-                           List2 = lists:map(fun({K0, V0}) -> {#{ list_to_atom(binary_to_list(Dimension)) => imetrics_utils:bin(K0)}, V0} end, List),
-                           orddict:append_list(Name, List2, MappedDict0);
-                      (_, MappedDict0) ->
-                           MappedDict0
-                   end, orddict:new(),
-                   T),
-    orddict:to_list(MappedDict).
+% handle metrics with a function
+get_mapped_({#{ name := Name } = Tags, ValueFun}, MappedDict0) when is_function(ValueFun) ->
+    Default = case Tags of
+        #{ '_multigauge' := _} -> [];
+        _ -> -1
+    end,
+    get_mapped_({Tags, call_metrics_fun(Name, ValueFun, Default)}, MappedDict0);
+
+% handle non-multigauge metrics
+get_mapped_({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key('_multigauge', Tags) ->
+    % if a dimension has been set on a mapped counter/gauge, rename 'map_key' to what that dimension is
+    % this is for backwards compatibility, the suggested path is to set your tags yourself and not use a mapped counter
+    Tags3 = case {maps:find(map_key, Tags), ets:lookup(imetrics_map_keys, Name)} of
+        {{ok, _}, [{Name, Dimension}]} when is_binary(Dimension) ->
+            {MapKeyValue, Tags2} = maps:take(map_key, Tags),
+            Tags2#{ list_to_atom(binary_to_list(Dimension)) => MapKeyValue };
+        _ ->
+            Tags
+        end,
+    
+    Tags4 = maps:remove(name, Tags3),
+    orddict:append_list(Name, [{Tags4, Value}], MappedDict0);
+
+% handle multigauge metrics
+get_mapped_({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) ->
+    List = get_mapped_multigauge(ets:lookup(imetrics_map_keys, Name), Value),
+    orddict:append_list(Name, List, MappedDict0);
+
+% all other metrics we ignore
+get_mapped_(_, MappedDict0) ->
+    MappedDict0.
+
+% multigauge that returns a single label
+get_mapped_multigauge([{_, Dimension}], Value) when is_binary(Dimension) ->
+    lists:map(fun({K0, V0}) ->
+        {#{ list_to_atom(binary_to_list(Dimension)) => imetrics_utils:bin(K0)}, V0}
+    end, Value);
+
+% multigauge that returns multiple labels
+get_mapped_multigauge([{_, Dimensions0}], Value) when is_tuple(Dimensions0) ->
+    Dimensions = tuple_to_list(Dimensions0),
+    lists:map(fun({K0, V0}) ->
+        K1 = lists:map(fun imetrics_utils:bin/1, tuple_to_list(K0)),
+        Tags0 = lists:zip(Dimensions, K1),
+        Tags = lists:map(fun({Dim, V1}) -> {Dim, imetrics_utils:bin(V1)} end, Tags0),
+        {maps:from_list(Tags), V0}
+    end, Value).
 
 % takes metrics that have a single entry with an empty map and simplify them to K/V pairs
 simplify_unmapped(List) ->
@@ -402,29 +434,37 @@ simplify_unmapped(List) ->
 simplify_mapped(List) ->
     simplify_mapped(List, false).
 simplify_mapped(List, IncludeDim) ->
-    lists:reverse(lists:foldl(fun ({Name, MetricPoints}, Acc) -> 
-            if is_list(MetricPoints) ->
-                    MapKeys = ets:lookup(imetrics_map_keys, Name),
-                    MapKeyBin = proplists:get_value(Name, MapKeys, <<"map_key">>),
-                    MapKeyAtom = list_to_atom(binary_to_list(MapKeyBin)),
-                    FoldAccStart2 = case IncludeDim of
-                        true -> [{<<"$dim">>, MapKeyBin}];
-                        false -> []
-                    end,
-                    MetricPoints2 = lists:sort(lists:foldl(fun ({Tags, Value}, Acc2) ->
-                            case maps:get(MapKeyAtom, Tags, undefined) of
-                                undefined -> Acc2;
-                                MapValue -> [{MapValue, Value}|Acc2]
-                            end
-                        end, FoldAccStart2, MetricPoints)),
-                    case MetricPoints2 of
-                        [] -> Acc;
-                        _ -> [{Name, MetricPoints2}|Acc]
-                    end;
-                true ->
-                    [{Name, MetricPoints}|Acc]
-            end
-        end, [], List)).
+    simplify_mapped_(List, IncludeDim, []).
+
+simplify_mapped_([], _, Acc) ->
+    lists:reverse(Acc);
+simplify_mapped_([{Name, MetricPoints}|Rest], IncludeDim, Acc) when is_list(MetricPoints) ->
+    MapKeys = ets:lookup(imetrics_map_keys, Name),
+    MapKey = proplists:get_value(Name, MapKeys, <<"map_key">>),
+    case MapKey of
+        _ when is_binary(MapKey) ->
+            MapKeyAtom = list_to_atom(binary_to_list(MapKey)),
+            FoldAccStart2 = case IncludeDim of
+                true -> [{<<"$dim">>, MapKey}];
+                false -> []
+            end,
+            MetricPoints2 = lists:sort(lists:foldl(fun ({Tags, Value}, Acc2) ->
+                    case maps:get(MapKeyAtom, Tags, undefined) of
+                        undefined -> Acc2;
+                        MapValue -> [{MapValue, Value}|Acc2]
+                    end
+                end, FoldAccStart2, MetricPoints)),
+            case MetricPoints2 of
+                [] -> simplify_mapped_(Rest, IncludeDim, Acc);
+                _ -> simplify_mapped_(Rest, IncludeDim, [{Name, MetricPoints2}|Acc])
+            end;
+
+        % multigauges with multiple tags can be ignored here
+        _ when is_tuple(MapKey) ->
+            simplify_mapped_(Rest, IncludeDim, Acc)
+    end;
+simplify_mapped_([{Name, MetricPoints}|Rest], IncludeDim, Acc) ->
+    simplify_mapped_(Rest, IncludeDim, [{Name, MetricPoints}|Acc]).
 
 tock_s_name_match(Ticks, Name) ->
     I = maps:iterator(Ticks),
