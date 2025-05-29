@@ -69,6 +69,32 @@ Often, a gauge is a calculation based on some counter over time. For example,
 consider tracking `miles_driven` instead of `velocity`. You may find that your
 metrics are more flexible down the road.
 
+### Function gauges ###
+
+You can define a gauge with a function. Each time the imetrics HTTP API is called,
+your metrics function will be executed to return the gauge's result.
+
+```erlang
+imetrics:set_gauge(fn_gauge, fun() -> 1.5 end)
+```
+
+Functions have a 5 second timeout.
+
+### Multigauges ###
+
+You can use a function to return multiple tagged gauges. This functionality is called a
+"multigauge" in imetrics. When creating the gauge, you provide a list of dimensions,
+and then you can return any number of metrics instances with different values for those
+dimensions.
+
+```erlang
+% single dimension
+imetrics:set_multigauge(network_connections, interface, fun () -> [{eth0, 14}, {wlan2, 3}] end),
+
+% multiple dimensions
+imetrics:set_multigauge(deliveries, {state, county}, fun () -> [{nc, wake}, 90}, {{nc, orange}, 370}] end),
+```
+
 ### Actor-based Gauges ###
 
 `imetrics` provides a module to help manage the collection of a gauge metric that occurs

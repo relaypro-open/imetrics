@@ -69,6 +69,16 @@ multigauge_test(_) ->
      ?_assertEqual([{<<"$dim">>,<<"dim">>},{<<"test">>,3}], proplists:get_value(<<"multigauge_test">>, Gauges))
     ].
 
+multigauge_multidim_test_() ->
+    {setup, fun start/0, fun stop/1, fun multigauge_multidim_test/1}.
+
+multigauge_multidim_test(_) ->
+    imetrics:set_multigauge(multigauge_multidim_test, {dim1, dim2}, fun() -> [{{<<"test1">>, <<"test2">>}, 4}] end),
+    Data = imetrics:get_with_types(),
+    [
+        ?_assertEqual({gauge, [{#{ dim1 => <<"test1">>, dim2 => <<"test2">> }, 4}]}, proplists:get_value(<<"multigauge_multidim_test">>, Data))
+    ].
+
 dimension_test_() ->
     {setup, fun start/0, fun stop/1, fun dimension_test/1}.
 
@@ -187,6 +197,9 @@ start_get() ->
     Stats2 = imetrics_stats:update(10, Stats),
     imetrics:set_stats(stats, Stats2),
 
+    imetrics:set_multigauge(multigauge, single_dim, fun () -> [{value1, 1}, {value3, 3}] end),
+    imetrics:set_multigauge(multigauge_2, {multi_dim_1, multi_dim_2}, fun () -> [{{value1, value2}, 1}, {{value3, value4}, 3}] end),
+
     imetrics:add(counter2),
     imetrics:add(tagged_counter2, #{tag2 => "val1"}),
     imetrics:set_exemplar(counter2, 3, #{test_label => test_label_value}, 1262304000),
@@ -294,6 +307,7 @@ http_test_varz(#{port := Port}) ->
         "fn_gauge_timeout -1",
         "gauge 1.5",
         "mapped_gauge $dim:key value:1.5",
+        "multigauge $dim:single_dim value1:1 value3:3",
         "stats max:10 min:10 n:1 sum:10 sum2:100"],
     Res2 = string:join(Res, "\n") ++ "\n",
     [
@@ -336,6 +350,12 @@ http_test_openmetrics(#{port := Port}) ->
         "gauge{} 1.5",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
+        "# TYPE multigauge gauge",
+        "multigauge{single_dim=\"value1\"} 1",
+        "multigauge{single_dim=\"value3\"} 3",
+        "# TYPE multigauge_2 gauge",
+        "multigauge_2{multi_dim_1=\"value1\",multi_dim_2=\"value2\"} 1",
+        "multigauge_2{multi_dim_1=\"value3\",multi_dim_2=\"value4\"} 3",
         "# TYPE stats unknown",
         "stats{map_key=\"max\"} 10",
         "stats{map_key=\"min\"} 10",
@@ -439,6 +459,12 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "gauge{} 1.5",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
+        "# TYPE multigauge gauge",
+        "multigauge{single_dim=\"value1\"} 1",
+        "multigauge{single_dim=\"value3\"} 3",
+        "# TYPE multigauge_2 gauge",
+        "multigauge_2{multi_dim_1=\"value1\",multi_dim_2=\"value2\"} 1",
+        "multigauge_2{multi_dim_1=\"value3\",multi_dim_2=\"value4\"} 3",
         "# TYPE tagged_hist histogram",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0.5\"} 0",
@@ -522,6 +548,12 @@ http_test_openmetrics_exemplars(#{port := Port}) ->
         "gauge{} 1.5",
         "# TYPE mapped_gauge gauge",
         "mapped_gauge{key=\"value\"} 1.5",
+        "# TYPE multigauge gauge",
+        "multigauge{single_dim=\"value1\"} 1",
+        "multigauge{single_dim=\"value3\"} 3",
+        "# TYPE multigauge_2 gauge",
+        "multigauge_2{multi_dim_1=\"value1\",multi_dim_2=\"value2\"} 1",
+        "multigauge_2{multi_dim_1=\"value3\",multi_dim_2=\"value4\"} 3",
         "# TYPE tagged_hist histogram",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0\"} 0",
         "tagged_hist_bucket{hist_tag=\"two\",le=\"0.5\"} 0",
