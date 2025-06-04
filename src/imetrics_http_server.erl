@@ -69,8 +69,8 @@ init(_Args) ->
 
 handle_call({cowboy_pid}, _From, State = #state{cowboy_pid = Pid}) ->
     {reply, Pid, State};
-handle_call({port}, _From, State = #state{port = Port}) ->
-    {reply, Port, State}.
+handle_call({port}, _From, State) ->
+    {reply, ranch:get_port(?MODULE), State}.
 
 handle_cast({start}, State) ->
     Port = application:get_env(imetrics, http_server_port, 8085),
