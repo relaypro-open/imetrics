@@ -7,3 +7,5 @@ _build
 
 /*.iml
 /.idea/
+
+benchmark_results.json

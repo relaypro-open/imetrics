@@ -1,0 +1,42 @@
+name: Benchmark
+
+permissions:
+  pull-requests: write
+
+on:
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        container:
+            image: erlang:25.3.2.12
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Compile
+              run: rebar3 compile
+
+            - name: Run benchmark
+              run: erl -noshell -pa $(./rebar3 path --lib)/imetrics/benchmarks -pa $(./rebar3 path) -s imetrics_sparse_write_benchmark -eval 'init:stop().'
+
+            - name: Download previous benchmark data
+              uses: actions/cache@v4
+              with:
+                  path: ./cache
+                  key: ${{ runner.os }}-benchmark
+
+            - name: Track benchmark in GH comments
+              uses: benchmark-action/github-action-benchmark@v1.20.4
+              with:
+                  tool: "customSmallerIsBetter"
+                  output-file-path: "benchmark_results.json"
+                  external-data-json-path: ./cache/benchmark-data.json
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  comment-on-alert: true
+                  summary-always: true
