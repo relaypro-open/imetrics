@@ -27,6 +27,13 @@ start_link() ->
 %% ------------------------------------------------------------------
 
 init([]) ->
+    % imetrics' use case typically involves many more writes than reads. only one or two metrics collectors
+    % should be reading from imetrics, even in a large application... while many processes may be writing.
+    % 
+    % these tables are configured with `write_concurrency` to ensure that individual processes don't lock the
+    % whole table when they try to increase a metric. additionally, `decentralized_counters` helps distribute
+    % the ETS table accounting (total # of objects, table size) across multiple different schedulers so
+    % there's no single shared lock when inserting or deleting new metrics either.
     ets:new(imetrics_counters, [public, named_table, {write_concurrency, true}, {decentralized_counters, true}]),
     ets:new(imetrics_gauges, [public, named_table, {write_concurrency, true}, {decentralized_counters, true}]),
     ets:new(imetrics_map_keys, [public, named_table, {write_concurrency, true}, {decentralized_counters, true}]),
