@@ -7,11 +7,11 @@
 
 -export([start/0]).
 
--define(WorkerProcesses, 128).
--define(WorkerInterval, 10). % milliseconds
+-define(WorkerProcesses, 4).
+-define(WorkerInterval, 0). % milliseconds
 -define(HttpInterval, timer:seconds(15)).
 -define(WarmPeriod, timer:seconds(20)).
--define(CollectPeriod, timer:seconds(65)).
+-define(CollectPeriod, timer:seconds(125)).
 -define(TimeUnit, microsecond).
 
 start() ->
@@ -100,32 +100,30 @@ http_loop(start, Port, Collect, Data) ->
 start_worker_threads(0, Acc) ->
     Acc;
 start_worker_threads(N, Acc) ->
-    Pid = spawn_link(fun() -> worker_loop(idle, N, nocollect, {0, 0}) end),
+    Pid = spawn_link(fun() -> worker_loop(idle, N, nocollect, {0, 0, 0}) end),
     start_worker_threads(N-1 , [Pid|Acc]).
 
-worker_loop(idle, Id, Collect, Data) ->
+worker_loop(idle, Id, Collect, {StartTime, EndTime, Count}) ->
     receive
         start ->
-            worker_loop(start, Id, Collect, Data);
+            worker_loop(start, Id, Collect, {StartTime, EndTime, Count});
         collect ->
-            worker_loop(idle, Id, collect, Data)
+            worker_loop(idle, Id, collect, {erlang:monotonic_time(?TimeUnit), EndTime, Count})
     end;
-worker_loop(start, Id, Collect, Data) ->
-    T1 = erlang:monotonic_time(?TimeUnit),
+worker_loop(start, Id, Collect, {StartTime, EndTime, Count}) ->
     imetrics:add(sparse_write_benchmark, #{id => Id}),
-    T2 = erlang:monotonic_time(?TimeUnit),
     Data2 = case Collect of
-        nocollect -> Data;
+        nocollect -> {StartTime, EndTime, Count};
         collect -> 
-            Diff = T2 - T1,
-            {Sum, Samples} = Data,
-            {Sum+Diff, Samples+1}
+            {StartTime, EndTime, Count+1}
     end,
     receive
         {stop, From, Ref} ->
-            erlang:send(From, {Ref, Data2});
+            {_, _, Count2} = Data2,
+            erlang:send(From, {Ref, {StartTime, erlang:monotonic_time(?TimeUnit), Count2}});
         collect ->
-            worker_loop(start, Id, collect, Data2)
+            {_, _, Count2} = Data2,
+            worker_loop(start, Id, collect, {erlang:monotonic_time(?TimeUnit), EndTime, Count2})
     after ?WorkerInterval ->
         worker_loop(start, Id, Collect, Data2)
     end.
@@ -148,7 +146,7 @@ receive_downs([M|Rest]) ->
 
 output_report(WriteData, ReadData) ->
     {HttpSum, HttpSamples} = lists:foldl(fun(Diff, {Sum, Samples}) -> {Sum+Diff, Samples+1} end, {0, 0}, ReadData),
-    {WorkerSum, WorkerSamples} = lists:foldl(fun ({WorkerNSum, WorkerNSamples}, {TotalSum, TotalSamples}) -> {TotalSum+WorkerNSum, TotalSamples+WorkerNSamples} end, {0, 0}, WriteData),
+    WorkerSum = lists:foldl(fun ({StartTime, EndTime, WorkerNSamples}, TotalSum) -> TotalSum + (WorkerNSamples / ((EndTime - StartTime) / 1_000_000)) end, 0, WriteData),
 
     io:format("== Read benchmark ==~n~n"),
 
@@ -161,14 +159,13 @@ output_report(WriteData, ReadData) ->
     io:format("Processes       = ~p~n", [?WorkerProcesses]),
     io:format("Worker interval = ~p ms~n~n", [?WorkerInterval]),
 
-    io:format("Metric writes   = ~p~n", [WorkerSamples]),
-    io:format("Latency         = ~p us (avg)~n~n", [WorkerSum / WorkerSamples]),
+    io:format("Throughput      = ~p metrics/s (avg between workers)~n~n", [WorkerSum / ?WorkerProcesses]),
 
     io:format("=====================~n~n"),
 
     {ok, File} = file:open("./benchmark_results.json", [write]),
     io:format(File, "[~n", []),
     io:format(File, "{\"name\": \"HTTP Response Time (avg)\", \"unit\": \"microseconds\", \"value\": ~p},~n", [HttpSum / HttpSamples]),
-    io:format(File, "{\"name\": \"Sparse metrics write latency (avg)\", \"unit\": \"microseconds\", \"value\": ~p}~n", [WorkerSum / WorkerSamples]),
+    io:format(File, "{\"name\": \"Metrics throughput (avg between workers)\", \"unit\": \"metrics/second\", \"value\": ~p}~n", [WorkerSum / ?WorkerProcesses]),
     io:format(File, "]~n", []),
     file:close(File).
