@@ -171,6 +171,21 @@ exemplar_test(_Fixture) ->
     ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"test1">>, '__name__' => <<"l">>})),
     ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"test2">>, '__name__' => <<"l">>})).
 
+init_counter_test_() ->
+    {setup,
+        fun start/0,
+        fun stop/1,
+        fun init_counter_test/1}. 
+
+init_counter_test(_Fixture) ->
+    Data1 = imetrics:get_with_types(),
+    ?_assertEqual(undefined, proplists:get_value(<<"empty_counter">>, Data1)),
+    ?_assertEqual(undefined, proplists:get_value(<<"empty_counter_mapped">>, Data1)),
+    imetrics:init_counter(empty_counter),
+    imetrics:init_counter(empty_counter_mapped, #{key => "abc"}),
+    Data2 = imetrics:get_with_types(),
+    ?_assertEqual({counter, [{#{}, 0}]}, proplists:get_value(<<"empty_counter">>, Data2)),
+    ?_assertEqual({counter, [{#{key => <<"abc">>}, 0}]}, proplists:get_value(<<"empty_counter_mapped">>, Data2)).
 
 %% get tests
 get_test_() ->
