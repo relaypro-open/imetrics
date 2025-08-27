@@ -2,7 +2,7 @@
 
 -include("../include/imetrics.hrl").
 
--export([add/1, add/2, add/3, set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5, set_exemplar/6, add_m/2, add_m/3, set_info/2]).
+-export([add/1, add/2, add/3, set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5, set_exemplar/6, add_m/2, add_m/3, set_info/2, init_counter/1, init_counter/2]).
 
 -export([set_gauge/2, set_gauge/3, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge/3, update_gauge_m/3]).
 
@@ -54,6 +54,11 @@ add(Name, Tags, Value) ->
             ets:update_counter(imetrics_counters, TagsWithName, Value, {TagsWithName, 0})
         end
     ).
+
+init_counter(Name) ->
+    init_counter(Name, #{}).
+init_counter(Name, Tags) when is_map(Tags) ->
+    add(Name, Tags, 0).
 
 set_exemplar(Name, EValue) ->
     set_exemplar(Name, #{}, EValue, #{}, erlang:system_time(millisecond)/1000, counter).
