@@ -2,17 +2,70 @@
 
 -include("../include/imetrics.hrl").
 
--export([add/1, add/2, add/3, set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5, set_exemplar/6, add_m/2, add_m/3, set_info/2, init_counter/1, init_counter/2]).
+-export([
+    add/1,
+    add/2,
+    add/3,
+    set_exemplar/2,
+    set_exemplar/3,
+    set_exemplar/4,
+    set_exemplar/5,
+    set_exemplar/6,
+    add_m/2,
+    add_m/3,
+    set_info/2,
+    init_counter/1,
+    init_counter/2
+]).
 
--export([set_gauge/2, set_gauge/3, set_gauge_m/3, set_multigauge/2, set_multigauge/3, update_gauge/2, update_gauge/3, update_gauge_m/3]).
+-export([
+    set_gauge/2,
+    set_gauge/3,
+    set_gauge_m/3,
+    set_multigauge/2,
+    set_multigauge/3,
+    update_gauge/2,
+    update_gauge/3,
+    update_gauge_m/3
+]).
 
--export([set_counter_dimension/2, register_slo/2]).
+-export([
+    set_counter_dimension/2,
+    register_slo/2
+]).
 
--export([hist/2, hist/3, hist/4, tick/1, tick/2, tock/1, tock/2, tock_as/2, tick_s/3, tick_s/4, tock_s/2, tock_as_s/3, stop_tick_s/2]).
+-export([
+    hist/2,
+    hist/3,
+    hist/4,
+    tick/1,
+    tick/2,
+    tick/3,
+    tock/1,
+    tock/2,
+    tock_as/2,
+    tick_s/3,
+    tick_s/4,
+    tock_s/2,
+    tock_as_s/3,
+    stop_tick_s/2
+]).
 
--export([stats/1, set_stats/2]).
+-export([
+    stats/1,
+    set_stats/2
+]).
 
--export([get/0, get_with_types/0, get_counters/0, get_gauges/0, get_hist/0, foldl_slo/3, get_slo/2, get_exemplar/1]).
+-export([
+    get/0,
+    get_with_types/0,
+    get_counters/0,
+    get_gauges/0,
+    get_hist/0,
+    foldl_slo/3,
+    get_slo/2,
+    get_exemplar/1
+]).
 
 -compile({no_auto_import,[get/0]}).
 
@@ -226,6 +279,9 @@ tick(Name) ->
 tick(Name, Unit) ->
     {Name, Unit, erlang:monotonic_time(Unit)}.
 
+tick(Name, Tags, Unit) ->
+    {{Name, Tags}, Unit, erlang:monotonic_time(Unit)}.
+
 tock(Tick) ->
     tock_as(Tick, '_').
 
@@ -234,7 +290,10 @@ tock(Tick, Fun) ->
 
 tock_as(Tick, NewName) ->
     tock_as(Tick, NewName,
-            fun(Name, Diff) ->
+            fun ({Name, Tags}, Diff) ->
+                    imetrics_hist_openmetrics:add(Name, Tags, Diff),
+                    Diff;
+                (Name, Diff) ->
                     imetrics_hist_openmetrics:add(Name, Diff),
                     Diff
             end).

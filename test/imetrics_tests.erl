@@ -625,6 +625,8 @@ start_ticktock() ->
     F = start(),
     imetrics:hist(test, [1, 10]),
     imetrics:hist(test2, [1, 10]),
+    imetrics:hist(test3, #{tag => tag1}, [1, 10]),
+    imetrics:hist(test3, #{tag => tag2}, [1, 10]),
     F.
 
 ticktock_test(_Fixture) ->
@@ -638,6 +640,40 @@ ticktock_test(_Fixture) ->
                     Tick = imetrics:tick(test, second),
                     timer:sleep(5),
                     imetrics:tock_as(Tick, test2)
+            end)()),
+        ?_assertEqual(0, (fun() ->
+                    Tick = imetrics:tick(test3, #{tag => tag1}, second),
+                    timer:sleep(5),
+                    imetrics:tock(Tick)
+            end)()),
+        ?_assertEqual(0, (fun() ->
+                    Tick = imetrics:tick(test3, #{tag => tag2}, second),
+                    timer:sleep(5),
+                    imetrics:tock(Tick)
+            end)()),
+        ?_assertEqual({histogram, [
+                {#{le => <<"1">>}, 1},
+                {#{le => <<"10">>}, 1},
+                {#{le => <<"+Inf">>}, 1}
+            ]}, (fun () ->
+            proplists:get_value(<<"test">>, imetrics:get_with_types())
+            end)()),
+        ?_assertEqual({histogram, [
+                {#{le => <<"1">>}, 1},
+                {#{le => <<"10">>}, 1},
+                {#{le => <<"+Inf">>}, 1}
+            ]}, (fun () ->
+            proplists:get_value(<<"test2">>, imetrics:get_with_types())
+            end)()),
+        ?_assertEqual({histogram, [
+                {#{le => <<"1">>, tag => <<"tag2">>}, 1},
+                {#{le => <<"10">>, tag => <<"tag2">>}, 1},
+                {#{le => <<"+Inf">>, tag => <<"tag2">>}, 1},
+                {#{le => <<"1">>, tag => <<"tag1">>}, 1},
+                {#{le => <<"10">>, tag => <<"tag1">>}, 1},
+                {#{le => <<"+Inf">>, tag => <<"tag1">>}, 1}
+            ]}, (fun () ->
+            proplists:get_value(<<"test3">>, imetrics:get_with_types())
             end)())
     ].
 
