@@ -3,6 +3,8 @@
 -export([init/2, terminate/3]).
 -export([get/1]).
 
+-define(AllowedLabelChars, "[^a-zA-Z0-9:_+.]").
+
 % cowboy functions:
 init(Req, State) ->
     {ok, Req1} = ?MODULE:get(Req),
@@ -87,8 +89,37 @@ get_exemplar_string(Name, Tags) ->
             ""
     end.
 
+% Truncate label to max length from application env (default 1024)
+truncate_label(Value) when is_list(Value) ->
+    MaxLen = application:get_env(imetrics, max_label_length, 1024),
+    case length(Value) > MaxLen of
+        true -> lists:sublist(Value, MaxLen);
+        false -> Value
+    end;
+truncate_label(Value) when is_binary(Value) ->
+    MaxLen = application:get_env(imetrics, max_label_length, 1024),
+    case byte_size(Value) > MaxLen of
+        true -> binary:part(Value, 0, MaxLen);
+        false -> Value
+    end.
+
+% Sanitize and truncate label names and values by replacing any character not in [a-zA-Z0-9:_+.] with underscores
+% Version for when we need a list result (no extra conversions in create_label_string)
+sanitize_label_to_list(Value) when is_list(Value) ->
+    Sanitized = re:replace(Value, ?AllowedLabelChars, "_", [global, {return, list}]),
+    truncate_label(Sanitized);
+sanitize_label_to_list(Value) ->
+    sanitize_label_to_list(binary:bin_to_list(imetrics_utils:bin(Value))).
+
+% Version for when we need a binary result (no extra conversions in create_tag_string)
+sanitize_label_to_binary(Value) when is_binary(Value) ->
+    Sanitized = re:replace(Value, ?AllowedLabelChars, "_", [global, {return, binary}]),
+    truncate_label(Sanitized);
+sanitize_label_to_binary(Value) ->
+    sanitize_label_to_binary(imetrics_utils:bin(Value)).
+
 create_label_string(Labels) ->
-    Result = maps:fold(fun(Label, Value, Acc) -> ("," ++ binary:bin_to_list(imetrics_utils:bin(Label)) ++ "=\"" ++ binary:bin_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
+    Result = maps:fold(fun(Label, Value, Acc) -> ("," ++ sanitize_label_to_list(Label) ++ "=\"" ++ sanitize_label_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
     case length(Result) of
         R when R < 3 ->
             Result;
@@ -121,7 +152,7 @@ deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
             deliver_legacy_mapped_metric(Req, Name, Tail);
         _ ->
             cowboy_req:stream_body(
-                [<<Name/binary, "{">>, <<"map_key">>, "=\"", Key, "\"} ", strnum(Value), "\n"], nofin, Req
+                [<<Name/binary, "{">>, <<"map_key">>, "=\"", sanitize_label_to_binary(Key), "\"} ", strnum(Value), "\n"], nofin, Req
             ),
             deliver_legacy_mapped_metric(Req, Name, Tail)
     end;
@@ -148,7 +179,7 @@ deliver_mapped_metric(_Req, _Type, _Name, []) ->
 create_tag_string(Tags) ->
     TagPairs = lists:foldl(
         fun({TagName, TagValue}, Acc) ->
-            [[list_to_binary(atom_to_list(TagName)), "=\"", TagValue, "\""] | Acc]
+            [[sanitize_label_to_binary(TagName), "=\"", sanitize_label_to_binary(TagValue), "\""] | Acc]
         end,
         [],
         maps:to_list(Tags)
