@@ -130,16 +130,7 @@ exemplar_test_() ->
         fun exemplar_test/1}. 
 
 exemplar_test(_Fixture) ->
-    ?_assertEqual(true, imetrics:set_exemplar(a, 1)),
-    ?_assertEqual(true, imetrics:set_exemplar(b, #{c => 1}, 2)),
-    ?_assertEqual(true, imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"})),
-    ?_assertEqual(true, imetrics:set_exemplar(f, 3, 946684800)),
-    ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k})),
-    ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 2}, 4, 978307200)),
-    ?_assertEqual(true, imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200)),
-    ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800)),
-    
-
+    % Setup code first
     imetrics:set_exemplar(a, 1),
     imetrics:set_exemplar(b, #{c => 1}, 2),
     imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"}),
@@ -151,25 +142,35 @@ exemplar_test(_Fixture) ->
     imetrics:set_exemplar(l, #{name => "test1"}, 1),
     imetrics:set_exemplar(l, #{name => "test2"}, 2),
 
-    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"a">>})),
-    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"b">>, c => <<"1">>})),
+    % Test variable definitions
     Test3Map = #{d => <<"2">>, e => <<"aa">>},
-    ?_assertMatch({2, Test3Map, _}, imetrics:get_exemplar(#{'__name__' => <<"c">>})),
-    ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{'__name__' => <<"f">>})),
     Test5Map = #{j => <<"k">>},
-    ?_assertMatch({3, Test5Map, _}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"1">>, i => <<"2">>})),
-    ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"2">>})),
     Test7Map = #{j => <<"bb">>},
-    ?_assertMatch({5, Test7Map, 1009843200}, imetrics:get_exemplar(#{'__name__' => <<"i">>})),
     Test8Map = #{m => <<"cc">>},
-    ?_assertMatch({6, Test8Map, 1577836800}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
-    
-    ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000)),
-    imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000),
-    ?_assertMatch({0.1, #{}, 1893456000}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
 
-    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"test1">>, '__name__' => <<"l">>})),
-    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"test2">>, '__name__' => <<"l">>})).
+    % Return list of test assertions
+    [
+        ?_assertEqual(true, imetrics:set_exemplar(a, 1)),
+        ?_assertEqual(true, imetrics:set_exemplar(b, #{c => 1}, 2)),
+        ?_assertEqual(true, imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"})),
+        ?_assertEqual(true, imetrics:set_exemplar(f, 3, 946684800)),
+        ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k})),
+        ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 2}, 4, 978307200)),
+        ?_assertEqual(true, imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200)),
+        ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800)),
+        ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"a">>})),
+        ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"b">>, c => <<"1">>})),
+        ?_assertMatch({2, Test3Map, _}, imetrics:get_exemplar(#{'__name__' => <<"c">>})),
+        ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{'__name__' => <<"f">>})),
+        ?_assertMatch({3, Test5Map, _}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"1">>, i => <<"2">>})),
+        ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"2">>})),
+        ?_assertMatch({5, Test7Map, 1009843200}, imetrics:get_exemplar(#{'__name__' => <<"i">>})),
+        ?_assertMatch({6, Test8Map, 1577836800}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
+        ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000)),
+        ?_assertMatch({0.1, #{}, 1893456000}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
+        ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"test1">>, '__name__' => <<"l">>})),
+        ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"test2">>, '__name__' => <<"l">>}))
+    ].
 
 init_counter_test_() ->
     {setup,
@@ -178,14 +179,19 @@ init_counter_test_() ->
         fun init_counter_test/1}. 
 
 init_counter_test(_Fixture) ->
+    % Setup and get initial data
     Data1 = imetrics:get_with_types(),
-    ?_assertEqual(undefined, proplists:get_value(<<"empty_counter">>, Data1)),
-    ?_assertEqual(undefined, proplists:get_value(<<"empty_counter_mapped">>, Data1)),
     imetrics:init_counter(empty_counter),
     imetrics:init_counter(empty_counter_mapped, #{key => "abc"}),
     Data2 = imetrics:get_with_types(),
-    ?_assertEqual({counter, [{#{}, 0}]}, proplists:get_value(<<"empty_counter">>, Data2)),
-    ?_assertEqual({counter, [{#{key => <<"abc">>}, 0}]}, proplists:get_value(<<"empty_counter_mapped">>, Data2)).
+    
+    % Return list of test assertions
+    [
+        ?_assertEqual(undefined, proplists:get_value(<<"empty_counter">>, Data1)),
+        ?_assertEqual(undefined, proplists:get_value(<<"empty_counter_mapped">>, Data1)),
+        ?_assertEqual({counter, [{#{}, 0}]}, proplists:get_value(<<"empty_counter">>, Data2)),
+        ?_assertEqual({counter, [{#{key => <<"abc">>}, 0}]}, proplists:get_value(<<"empty_counter_mapped">>, Data2))
+    ].
 
 %% get tests
 get_test_() ->
@@ -225,6 +231,12 @@ start_get() ->
     imetrics:set_exemplar(counter3_invalid_exemplar, 3, #{'9invalid_label' => valid_value}, 12623040000),
     imetrics:add(counter4_invalid_exemplar),
     imetrics:set_exemplar(counter4_invalid_exemplar, 3, #{valid_label => "Invalid \"Value\""}, 12623040000),
+
+    imetrics:add(newline_counter, #{test_label => "value\nwith\"double\"\nquotes"}),
+
+    % Test label truncation - create a label longer than default 1024 chars
+    LongLabel = lists:duplicate(1050, $a), % 1050 'a' characters
+    imetrics:add(long_label_counter, #{long_label => LongLabel}),
 
     imetrics_hist_openmetrics:new(hist, [0,0.01,0.1,0.5,1,5,10]),
     imetrics_hist_openmetrics:new(tagged_hist, #{hist_tag => "one"}, [0,1], 5),
@@ -351,8 +363,12 @@ http_test_openmetrics(#{port := Port}) ->
         "counter_tuple{} 1",
         "# TYPE imetrics_metric_fun_timeout counter",
         "imetrics_metric_fun_timeout{metric=\"fn_gauge_timeout\"} 1",
+        "# TYPE long_label_counter counter",
+        "long_label_counter{long_label=\"" ++ lists:duplicate(1024, $a) ++ "\"} 1",
         "# TYPE mapped_counter counter",
         "mapped_counter{map_key=\"key\"} 1",
+        "# TYPE newline_counter counter",
+        "newline_counter{test_label=\"value_with_double__quotes\"} 1",
         "# TYPE tagged_counter counter",
         "tagged_counter{tag1=\"val1\"} 1",
         "# TYPE tagged_counter2 counter",
@@ -460,8 +476,12 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "counter_tuple{} 1",
         "# TYPE imetrics_metric_fun_timeout counter",
         "imetrics_metric_fun_timeout{metric=\"fn_gauge_timeout\"} 3",
+        "# TYPE long_label_counter counter",
+        "long_label_counter{long_label=\"" ++ lists:duplicate(1024, $a) ++ "\"} 1",
         "# TYPE mapped_counter counter",
         "mapped_counter{map_key=\"key\"} 1",
+        "# TYPE newline_counter counter",
+        "newline_counter{test_label=\"value_with_double__quotes\"} 1",
         "# TYPE tagged_counter counter",
         "tagged_counter{tag1=\"val1\"} 1",
         "# TYPE tagged_counter2 counter",
@@ -549,8 +569,12 @@ http_test_openmetrics_exemplars(#{port := Port}) ->
         "counter_tuple_total{} 1",
         "# TYPE imetrics_metric_fun_timeout counter",
         "imetrics_metric_fun_timeout_total{metric=\"fn_gauge_timeout\"} 4",
+        "# TYPE long_label_counter counter",
+        "long_label_counter_total{long_label=\"" ++ lists:duplicate(1024, $a) ++ "\"} 1",
         "# TYPE mapped_counter counter",
         "mapped_counter_total{map_key=\"key\"} 1",
+        "# TYPE newline_counter counter",
+        "newline_counter_total{test_label=\"value_with_double__quotes\"} 1",
         "# TYPE tagged_counter counter",
         "tagged_counter_total{tag1=\"val1\"} 1",
         "# TYPE tagged_counter2 counter",
