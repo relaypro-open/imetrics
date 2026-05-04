@@ -79,7 +79,7 @@ get_exemplar_string(Name, Tags) ->
                 true ->
                     EStr = strnum(EValue),
                     TStr = strnum(Timestamp),
-                    [" # {", create_label_string(Labels) ++ "} ", EStr, " ", TStr];
+                    [" # {", create_label_string(Labels), "} ", EStr, " ", TStr];
                 false ->
                     ""
             end;
