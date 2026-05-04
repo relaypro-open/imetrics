@@ -130,46 +130,36 @@ exemplar_test_() ->
         fun exemplar_test/1}. 
 
 exemplar_test(_Fixture) ->
-    ?_assertEqual(true, imetrics:set_exemplar(a, 1)),
-    ?_assertEqual(true, imetrics:set_exemplar(b, #{c => 1}, 2)),
-    ?_assertEqual(true, imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"})),
-    ?_assertEqual(true, imetrics:set_exemplar(f, 3, 946684800)),
-    ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k})),
-    ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 2}, 4, 978307200)),
-    ?_assertEqual(true, imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200)),
-    ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800)),
-    
+    [
+        ?_assertEqual(true, imetrics:set_exemplar(a, 1)),
+        ?_assertEqual(true, imetrics:set_exemplar(b, #{c => 1}, 2)),
+        ?_assertEqual(true, imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"})),
+        ?_assertEqual(true, imetrics:set_exemplar(f, 3, 946684800)),
+        ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k})),
+        ?_assertEqual(true, imetrics:set_exemplar(g, #{h => 2}, 4, 978307200)),
+        ?_assertEqual(true, imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200)),
+        ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800)),
+        ?_assertEqual(true, imetrics:set_exemplar(l, #{name => "test1"}, 1)),
+        ?_assertEqual(true, imetrics:set_exemplar(l, #{name => "test2"}, 2)),
 
-    imetrics:set_exemplar(a, 1),
-    imetrics:set_exemplar(b, #{c => 1}, 2),
-    imetrics:set_exemplar(c, 2, #{d => 2, e => "aa"}),
-    imetrics:set_exemplar(f, 3, 946684800),
-    imetrics:set_exemplar(g, #{h => 1, i=> 2}, 3, #{j => k}),
-    imetrics:set_exemplar(g, #{h => 2}, 4, 978307200),
-    imetrics:set_exemplar(i, 5, #{j => "bb"}, 1009843200),
-    imetrics:set_exemplar(k, #{l => 3}, 6, #{m => "cc"}, 1577836800),
-    imetrics:set_exemplar(l, #{name => "test1"}, 1),
-    imetrics:set_exemplar(l, #{name => "test2"}, 2),
+        ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"a">>})),
+        ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"b">>, c => <<"1">>})),
+        ?_assertMatch({2, #{d := <<"2">>, e := <<"aa">>}, _}, imetrics:get_exemplar(#{'__name__' => <<"c">>})),
+        ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{'__name__' => <<"f">>})),
+        ?_assertMatch({3, #{j := <<"k">>}, _}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"1">>, i => <<"2">>})),
+        ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"2">>})),
+        ?_assertMatch({5, #{j := <<"bb">>}, 1009843200}, imetrics:get_exemplar(#{'__name__' => <<"i">>})),
+        ?_assertMatch({6, #{m := <<"cc">>}, 1577836800}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
 
-    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"a">>})),
-    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"b">>, c => <<"1">>})),
-    Test3Map = #{d => <<"2">>, e => <<"aa">>},
-    ?_assertMatch({2, Test3Map, _}, imetrics:get_exemplar(#{'__name__' => <<"c">>})),
-    ?_assertMatch({3, #{}, 946684800}, imetrics:get_exemplar(#{'__name__' => <<"f">>})),
-    Test5Map = #{j => <<"k">>},
-    ?_assertMatch({3, Test5Map, _}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"1">>, i => <<"2">>})),
-    ?_assertMatch({4, #{}, 978307200}, imetrics:get_exemplar(#{'__name__' => <<"g">>, h => <<"2">>})),
-    Test7Map = #{j => <<"bb">>},
-    ?_assertMatch({5, Test7Map, 1009843200}, imetrics:get_exemplar(#{'__name__' => <<"i">>})),
-    Test8Map = #{m => <<"cc">>},
-    ?_assertMatch({6, Test8Map, 1577836800}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
-    
-    ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000)),
-    imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000),
-    ?_assertMatch({0.1, #{}, 1893456000}, imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})),
+        ?_assertEqual(true, imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000)),
+        ?_assertMatch({0.1, #{}, 1893456000}, begin
+                                                  imetrics:set_exemplar(k, #{l => 3}, 0.1, 1893456000),
+                                                  imetrics:get_exemplar(#{'__name__' => <<"k">>, l => <<"3">>})
+                                              end),
 
-    ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"test1">>, '__name__' => <<"l">>})),
-    ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"test2">>, '__name__' => <<"l">>})).
+        ?_assertMatch({1, #{}, _}, imetrics:get_exemplar(#{name => <<"test1">>, '__name__' => <<"l">>})),
+        ?_assertMatch({2, #{}, _}, imetrics:get_exemplar(#{name => <<"test2">>, '__name__' => <<"l">>}))
+    ].
 
 init_counter_test_() ->
     {setup,
@@ -178,14 +168,20 @@ init_counter_test_() ->
         fun init_counter_test/1}. 
 
 init_counter_test(_Fixture) ->
-    Data1 = imetrics:get_with_types(),
-    ?_assertEqual(undefined, proplists:get_value(<<"empty_counter">>, Data1)),
-    ?_assertEqual(undefined, proplists:get_value(<<"empty_counter_mapped">>, Data1)),
-    imetrics:init_counter(empty_counter),
-    imetrics:init_counter(empty_counter_mapped, #{key => "abc"}),
-    Data2 = imetrics:get_with_types(),
-    ?_assertEqual({counter, [{#{}, 0}]}, proplists:get_value(<<"empty_counter">>, Data2)),
-    ?_assertEqual({counter, [{#{key => <<"abc">>}, 0}]}, proplists:get_value(<<"empty_counter_mapped">>, Data2)).
+    [
+        ?_assertEqual(undefined, proplists:get_value(<<"empty_counter">>, imetrics:get_with_types())),
+        ?_assertEqual(undefined, proplists:get_value(<<"empty_counter_mapped">>, imetrics:get_with_types())),
+        ?_assertEqual({counter, [{#{}, 0}]}, proplists:get_value(<<"empty_counter">>, begin
+                                                                                        imetrics:init_counter(empty_counter),
+                                                                                        imetrics:get_with_types()
+                                                                                      end
+                                                                                    )),
+        ?_assertEqual({counter, [{#{key => <<"abc">>}, 0}]}, proplists:get_value(<<"empty_counter_mapped">>, begin
+                                                                                                                 imetrics:init_counter(empty_counter_mapped, #{key => "abc"}),
+                                                                                                                 imetrics:get_with_types()
+                                                                                                             end
+                                                                             ))
+    ].
 
 %% get tests
 get_test_() ->
