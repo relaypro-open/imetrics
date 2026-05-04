@@ -26,7 +26,7 @@ slo_test(_Fixture) ->
      ?_assertMatch([{<<"uid">>,[{<<"$ms">>,_},{<<"test_metric">>,1}]}], imetrics_slo:dump(eunit, <<"uid">>)),
      ?_assertMatch(#{keys := 1, memory := 1064, uids := 1}, imetrics_slo:info(eunit)),
      ?_assertMatch(#{eunit := #{keys := 1, memory := 1064, uids := 1}}, imetrics_sup:slo_info()),
-     ?_assertMatch(_, [ imetrics_slo:add(eunit, X, <<"test_metric">>) || X <- lists:seq(1, 1000)]),
+     ?_assertMatch([_|_], [ imetrics_slo:add(eunit, X, <<"test_metric">>) || X <- lists:seq(1, 1000)]),
      ?_assertMatch(#{keys := 1, memory := 97888, uids := 92}, imetrics_slo:info(eunit)),
      ?_assertMatch(ok, imetrics_slo:put(eunit, <<"uid">>, <<"test_put_metric">>, 10)),
      ?_assertMatch(10, imetrics_slo:get(eunit, <<"uid">>, <<"test_put_metric">>)),
