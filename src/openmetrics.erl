@@ -79,7 +79,7 @@ get_exemplar_string(Name, Tags) ->
                 true ->
                     EStr = strnum(EValue),
                     TStr = strnum(Timestamp),
-                    " # {" ++ create_label_string(Labels) ++ "} " ++ EStr ++ " " ++ TStr;
+                    [" # {", create_label_string(Labels), "} ", EStr, " ", TStr];
                 false ->
                     ""
             end;
@@ -88,14 +88,11 @@ get_exemplar_string(Name, Tags) ->
     end.
 
 create_label_string(Labels) ->
-    Result = maps:fold(fun(Label, Value, Acc) -> ("," ++ binary:bin_to_list(imetrics_utils:bin(Label)) ++ "=\"" ++ binary:bin_to_list(Value) ++ "\"" ++ Acc) end, "", Labels),
-    case length(Result) of
-        R when R < 3 ->
-            Result;
-        _ ->
-            [_| Result2] = Result,
-            Result2
-    end.
+    EncLabels = lists:map(
+      fun({Label, Value}) ->
+        [binary:bin_to_list(imetrics_utils:bin(Label)), "=\"", binary:bin_to_list(Value), "\""]
+      end, lists:sort(maps:to_list(Labels))),
+    lists:join(",", EncLabels).
 
 is_valid_labels(Labels) ->
     maps:fold(fun(Label, Value, Valid) -> Valid and is_valid_label_name(Label) and is_valid_label_value(Value) end, true, Labels).
@@ -146,14 +143,13 @@ deliver_mapped_metric(_Req, _Type, _Name, []) ->
     ok.
 
 create_tag_string(Tags) ->
-    TagPairs = lists:foldl(
-        fun({TagName, TagValue}, Acc) ->
-            [[list_to_binary(atom_to_list(TagName)), "=\"", TagValue, "\""] | Acc]
+    TagPairs = lists:map(
+        fun({TagName, TagValue}) ->
+            [list_to_binary(atom_to_list(TagName)), "=\"", TagValue, "\""]
         end,
-        [],
-        maps:to_list(Tags)
+        lists:sort(maps:to_list(Tags))
     ),
-    ["{", lists:join(",", lists:reverse(TagPairs)), "}"].
+    ["{", lists:join(",", TagPairs), "}"].
 
 strnum('NaN') -> "NaN";
 strnum(N) when is_integer(N) -> integer_to_list(N);
