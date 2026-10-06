@@ -56,12 +56,16 @@ handle_info(refresh_gauges, State) ->
 
     AtomCount = erlang:system_info(atom_count),
     AtomLimit = erlang:system_info(atom_limit),
+    PortCount = erlang:system_info(port_count),
+    PortLimit = erlang:system_info(port_limit),
     ProcessCount = erlang:system_info(process_count),
 
     imetrics:set_gauge(erlang_vm, #{ vm_metric => max_message_queue_len }, MaxMQueueLen),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => max_memory }, MaxMemory),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => atom_count }, AtomCount),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => atom_limit }, AtomLimit),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => port_count }, PortCount),
+    imetrics:set_gauge(erlang_vm, #{ vm_metric => port_limit }, PortLimit),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => process_count }, ProcessCount),
     imetrics:set_gauge(erlang_vm, #{ vm_metric => last_update_time }, os:system_time(second)),
 
