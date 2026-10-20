@@ -1,6 +1,9 @@
 -module(imetrics_slo_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% These exercise the real implementation; see imetrics_stub_tests for the stub build.
+-ifndef(IMETRICS_STUB).
+
 start() ->
     application:load(imetrics),
     application:ensure_all_started(imetrics),
@@ -33,3 +36,5 @@ slo_test(_Fixture) ->
      ?_assertMatch(ok, imetrics_slo:remove(eunit, <<"uid">>)),
      ?_assertMatch(0, imetrics_slo:get(eunit, <<"uid">>, <<"test_put_metric">>))
     ].
+
+-endif.

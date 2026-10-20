@@ -1,6 +1,9 @@
 -module(imetrics_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% These exercise the real implementation; see imetrics_stub_tests for the stub build.
+-ifndef(IMETRICS_STUB).
+
 start() ->
     application:load(imetrics),
     application:set_env(imetrics, http_server_port, 8086),
@@ -11,6 +14,9 @@ stop(_Fixture) ->
     application:stop(imetrics).
 
 %% add tests
+impl_test() ->
+    ?assertEqual(regular, imetrics:impl()).
+
 add_test_() ->
     {setup,
         fun start/0,
@@ -33,7 +39,9 @@ add_test(_Fixture) ->
         ?_assertEqual(1, imetrics:add_m("list_m", "list_k")),
         ?_assertEqual(5, imetrics:add_m("list_m", "list_k_set", 5)),
         ?_assertEqual(1, imetrics:add_m(atom_m, 200)),
-        ?_assertEqual(5, imetrics:add(many_incr)),
+        % add returns the calling scheduler's shard, so check the total via get_counters
+        ?_assertMatch(N when is_integer(N), imetrics:add(many_incr)),
+        ?_assertEqual(5, proplists:get_value(<<"many_incr">>, imetrics:get_counters())),
         ?_assertEqual(1, imetrics:add({a,b,c})),
         ?_assertEqual(1, imetrics:add(200)),
         ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i})),
@@ -696,3 +704,5 @@ ticktock_s_test(_Fixture) ->
                                      Result
                              end)())
     ].
+
+-endif.

@@ -32,10 +32,12 @@ handle(Type, Req, DataFun) ->
 % to deliver different types of data. 'types' here refers to a list of metrics,
 % annotated with the "type" of their metric, such as those returned by imetrics:get_with_types/0
 deliver_data(Req, _Type = types, Data) ->
-    Func = fun deliver_metricfamily/2,
-    lists:foreach(fun(Value) -> Func(Req, Value) end, Data).
+    % one scan of the exemplars for the whole scrape, not one read per line
+    Exemplars = imetrics:get_exemplars(),
+    Func = fun deliver_metricfamily/3,
+    lists:foreach(fun(Value) -> Func(Req, Value, Exemplars) end, Data).
 
-deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
+deliver_metricfamily(Req, {Name, {Type, MetricValue}}, Exemplars) ->
     % as new types of metrics are added to this case statement, they should be added
     % to the exclusion list in varz.erl
     ShouldPrintMetric =
@@ -63,7 +65,7 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
         {ok, MappedValues} when is_list(MappedValues) ->
             case MappedValues of
                 [{Tags, _Value} | _] when is_map(Tags) ->
-                    deliver_mapped_metric(Req, Type, Name, MappedValues);
+                    deliver_mapped_metric(Req, Type, Name, MappedValues, Exemplars);
                 _ ->
                     deliver_legacy_mapped_metric(Req, Name, MappedValues)
             end;
@@ -71,9 +73,9 @@ deliver_metricfamily(Req, {Name, {Type, MetricValue}}) ->
             ok
     end.
 
-get_exemplar_string(Name, Tags) ->
+get_exemplar_string(Name, Tags, Exemplars) ->
     TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name }),
-    case imetrics:get_exemplar(TagsWithName) of
+    case maps:get(TagsWithName, Exemplars, undefined) of
         {EValue, Labels, Timestamp} ->
             case is_valid_labels(Labels) of
                 true ->
@@ -125,21 +127,21 @@ deliver_legacy_mapped_metric(Req, Name, [{Key, Value} | Tail]) ->
 deliver_legacy_mapped_metric(_Req, _Name, []) ->
     ok.
 
-deliver_mapped_metric(Req, Type, Name, [{Tags, Value} | Tail]) ->
+deliver_mapped_metric(Req, Type, Name, [{Tags, Value} | Tail], Exemplars) ->
     TagString = create_tag_string(Tags),
     case {Type, application:get_env(imetrics, openmetrics_exemplar_compat, false)} of
         {counter, true} ->
-            cowboy_req:stream_body([Name, "_total", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
+            cowboy_req:stream_body([Name, "_total", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags, Exemplars), "\n"], nofin, Req);
         {histogram, _} ->
-            cowboy_req:stream_body([Name, "_bucket", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags), "\n"], nofin, Req);
+            cowboy_req:stream_body([Name, "_bucket", TagString, " ", strnum(Value), get_exemplar_string(Name, Tags, Exemplars), "\n"], nofin, Req);
         {info, _} ->
             cowboy_req:stream_body([Name, "_info", TagString, " ", strnum(Value), "\n"], nofin, Req);
         {_, _} ->
             cowboy_req:stream_body([Name, TagString, " ", strnum(Value), "\n"], nofin, Req)
     end,
     
-    deliver_mapped_metric(Req, Type, Name, Tail);
-deliver_mapped_metric(_Req, _Type, _Name, []) ->
+    deliver_mapped_metric(Req, Type, Name, Tail, Exemplars);
+deliver_mapped_metric(_Req, _Type, _Name, [], _Exemplars) ->
     ok.
 
 create_tag_string(Tags) ->

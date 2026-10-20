@@ -1,85 +1,35 @@
 -module(imetrics_slo).
 
+%% Public API facade. Calls are delegated to imetrics_slo_impl, or to
+%% imetrics_slo_stub when compiled with {d, 'IMETRICS_STUB'}.
+-ifdef(IMETRICS_STUB).
+-define(IMPL, imetrics_slo_stub).
+-else.
+-define(IMPL, imetrics_slo_impl).
+-endif.
+
 -export([svr_ref/1, uid_name/1,
          get/3, add/3, add/4, put/4, dump/1, dump/2, info/1, foldl_dump/3, remove/2]).
 
--define(CATCH_KNOWN_EXC(X), try
-                                X
-                            catch
-                                exit:{noproc,{gen_server,call, _}} ->
-                                    {error, unregistered_slo};
-                                error:badarg ->
-                                    {error, {badarg, check_ets}}
-                            end).
+svr_ref(UIdName) -> ?IMPL:svr_ref(UIdName).
 
-svr_ref(UIdName) ->
-    list_to_atom("imetrics_slo_" ++ atom_to_list(UIdName)).
+uid_name(SvrRef) -> ?IMPL:uid_name(SvrRef).
 
-uid_name(SvrRef) ->
-    case atom_to_list(SvrRef) of
-        "imetrics_slo_" ++ UIdNameStr ->
-            list_to_atom(UIdNameStr)
-    end.
+get(UIdName, UId, Key) -> ?IMPL:get(UIdName, UId, Key).
 
-get(UIdName, UId, Key) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:get(svr_ref(UIdName), imetrics_utils:bin(UId), imetrics_utils:bin(Key))
-       end
-      ).
+add(UIdName, UId, Key) -> ?IMPL:add(UIdName, UId, Key).
+add(UIdName, UId, Key, Val) -> ?IMPL:add(UIdName, UId, Key, Val).
 
-add(UIdName, UId, Key) ->
-    add(UIdName, UId, Key, 1).
-
-add(UIdName, UId, Key, Val) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:add(svr_ref(UIdName), imetrics_utils:bin(UId), imetrics_utils:bin(Key), Val)
-       end
-      ).
-
-put(UIdName, UId, Key, Val) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:put(svr_ref(UIdName), imetrics_utils:bin(UId), imetrics_utils:bin(Key), Val)
-       end
-      ).
+put(UIdName, UId, Key, Val) -> ?IMPL:put(UIdName, UId, Key, Val).
 
 %% @doc remove/2 is provided for completeness, but will not typically be used. It's only useful
 %% if you know a particular UId is no longer relevant and want to manage its lifetime manually.
 %% Otherwise, the icount gc has you covered.
-remove(UIdName, UId) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:remove(svr_ref(UIdName), imetrics_utils:bin(UId))
-       end
-      ).
+remove(UIdName, UId) -> ?IMPL:remove(UIdName, UId).
 
-dump(UIdName) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:dump(svr_ref(UIdName))
-       end
-      ).
+dump(UIdName) -> ?IMPL:dump(UIdName).
+dump(UIdName, UId) -> ?IMPL:dump(UIdName, UId).
 
-dump(UIdName, UId) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:dump(svr_ref(UIdName), imetrics_utils:bin(UId))
-       end
-      ).
+info(UIdName) -> ?IMPL:info(UIdName).
 
-info(UIdName) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:info(svr_ref(UIdName))
-       end
-      ).
-
-foldl_dump(UIdName, F, A) ->
-    ?CATCH_KNOWN_EXC(
-       begin
-           icount:foldl_dump(svr_ref(UIdName), F, A)
-       end
-      ).
-
+foldl_dump(UIdName, F, A) -> ?IMPL:foldl_dump(UIdName, F, A).

@@ -1,6 +1,9 @@
 -module(imetrics_actors_tests).
 -include_lib("eunit/include/eunit.hrl").
 
+%% These exercise the real implementation; see imetrics_stub_tests for the stub build.
+-ifndef(IMETRICS_STUB).
+
 start() ->
     application:load(imetrics),
     application:set_env(imetrics, http_server_port, 8086),
@@ -57,3 +60,5 @@ room_sensors_test(_) ->
                          {<<"occupants">>,2},
                          {<<"temperature">>,76}]}], imetrics:get_gauges())
     ].
+
+-endif.
