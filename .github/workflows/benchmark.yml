@@ -28,6 +28,9 @@ jobs:
             - name: Run contended write benchmark
               run: erl -noshell -pa $(./rebar3 path --lib)/imetrics/benchmarks -pa $(./rebar3 path) -s imetrics_contended_write_benchmark -eval 'init:stop().'
 
+            - name: Run write scaling benchmark
+              run: erl -noshell -pa $(./rebar3 path --lib)/imetrics/benchmarks -pa $(./rebar3 path) -eval 'imetrics_write_scaling_benchmark:start(), init:stop().'
+
             - name: Download previous benchmark data
               uses: actions/cache@v4
               with:
@@ -62,6 +65,17 @@ jobs:
                   tool: "customBiggerIsBetter"
                   output-file-path: "benchmark_results_contended.json"
                   external-data-json-path: ./cache/benchmark-contended-data.json
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  comment-on-alert: true
+                  summary-always: true
+
+            - name: Track write scaling benchmark in GH comments
+              uses: benchmark-action/github-action-benchmark@v1.20.4
+              with:
+                  name: Write scaling benchmark
+                  tool: "customBiggerIsBetter"
+                  output-file-path: "benchmark_results_scaling.json"
+                  external-data-json-path: ./cache/benchmark-scaling-data.json
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   comment-on-alert: true
                   summary-always: true
