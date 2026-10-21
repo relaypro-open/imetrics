@@ -15,9 +15,11 @@ bin(T) when is_tuple(T) andalso tuple_size(T) =< 8 ->
     L2 = [ bin(X) || X <- L ],
     binary_join(L2, application:get_env(imetrics, separator, <<"_">>));
 bin(M) when is_map(M) ->
-    % not maps:map/2: this runs on every add, and on OTP 25.2 maps:map/2 (like
-    % maps:fold/3) measured no faster from 10 concurrent processes than from
-    % one, while to_list/from_list scaled ~6x
+    % Surprising finding: previous code using maps:map with an anonymous function
+    % performs measurably worse on OTP <= 26 due to the repeated creation of the
+    % anonymous function. Using a list comprehension solves this on OTP 25. In
+    % later OTP releases, anonymous functions without free variables are created
+    % as literals in the module.
     maps:from_list([{Key, bin(Value)} || {Key, Value} <- maps:to_list(M)]).
 
 -spec binary_join([binary()], binary()) -> binary().

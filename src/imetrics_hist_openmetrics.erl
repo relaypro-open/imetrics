@@ -7,7 +7,6 @@
 
 -export([set_exemplar/2, set_exemplar/3, set_exemplar/4, set_exemplar/5]).
 
-%% Internal, used by the tests.
 -export([delete/2]).
 
 %% Tables:
@@ -230,9 +229,8 @@ bucket_totals() ->
 delete_shards(BucketKey) ->
     lists:foreach(fun(Shard) -> ets:delete(?COUNTS, {BucketKey, Shard}) end, shards()).
 
-%% @private Removes one histogram (its bucket definitions, every shard of every
-%% bucket, and its name entries), so it no longer appears in any read. Used by
-%% imetrics_bench and the tests.
+%% Removes one histogram (its bucket definitions, every shard of every
+%% bucket, and its name entries), so it no longer appears in any read.
 -spec delete(term(), map()) -> ok | {error, term()}.
 delete(Name, Tags) ->
     ?CATCH_KNOWN_EXC(

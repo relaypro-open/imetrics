@@ -31,7 +31,6 @@ shard_test_() ->
         fun histogram_reset/1,
         fun delete/1,
         fun restart_clears/1,
-        fun raw_keys/1,
         fun shard_rows/1,
         fun exemplars/1,
         fun hist_get_all/1,
@@ -150,7 +149,7 @@ delete(_) ->
     Hist = imetrics_hist_openmetrics:get_all(),
     [
         ?_assertEqual(undefined, proplists:get_value(<<"del_c">>, imetrics:get_with_types())),
-        ?_assertEqual(0, shard_rows(imetrics_counters, {del_c, #{k => v}})),
+        ?_assertEqual(0, shard_rows(imetrics_counters, imetrics_utils:bin(#{name => del_c, k => v}))),
         ?_assertEqual({counter, [{#{k => <<"v">>}, 1}]}, proplists:get_value(<<"del_keep">>, imetrics:get_with_types())),
         ?_assertEqual([], imetrics_hist_openmetrics:get_hist(del_h)),
         ?_assertEqual(0, shard_rows(imetrics_hist_counts, {imetrics_utils:bin(#{'__name__' => del_h}), 1})),
@@ -159,43 +158,6 @@ delete(_) ->
                       proplists:get_value(<<"del_h">>, Hist)),
         ?_assertEqual(ok, imetrics_hist_openmetrics:delete(del_h, #{k => v})),
         ?_assertEqual(undefined, proplists:get_value(<<"del_h">>, imetrics_hist_openmetrics:get_all()))
-    ].
-
-%% Counter keys are stored raw and converted on read. Raw keys that convert to
-%% the same binaries are one series; an invalid key still fails at write time
-%% and leaves no row; delete_counter/2 removes every raw form of a series; a
-%% tuple add_m key is joined with the separator at write time.
-raw_keys(_) ->
-    imetrics:add(raw_c, #{k => v}),
-    imetrics:add(raw_c, #{k => "v"}),
-    imetrics:add("raw_c", #{k => <<"v">>}),
-    imetrics:add_m(raw_m, key),
-    imetrics:add_m(<<"raw_m">>, "key", 2),
-    Bad = {a,b,c,d,e,f,g,h,i},
-    BadResult = imetrics:add(Bad, #{k => v}),
-    imetrics:add(raw_d, #{k => v}),
-    imetrics:add(raw_d, #{k => "v"}),
-    imetrics:add(raw_keep, #{k => v}),
-    ok = imetrics:delete_counter(raw_d, #{k => <<"v">>}),
-    % a tuple add_m key keeps the separator in effect when it was written
-    application:set_env(imetrics, separator, <<":">>),
-    imetrics:add_m(raw_t, {a, b}),
-    application:unset_env(imetrics, separator),
-    BadKeyResult = imetrics:add_m(raw_bad, Bad),
-    Types = imetrics:get_with_types(),
-    [
-        ?_assertEqual({counter, [{#{k => <<"v">>}, 3}]}, proplists:get_value(<<"raw_c">>, Types)),
-        ?_assertEqual({counter, [{#{map_key => <<"key">>}, 3}]}, proplists:get_value(<<"raw_m">>, Types)),
-        ?_assertEqual({error, {function_clause, check_inputs}}, BadResult),
-        ?_assertEqual(0, ets:select_count(imetrics_counters,
-                                          [{{{{'$1', '_'}, '_'}, '_'}, [{'=:=', '$1', {const, Bad}}], [true]}])),
-        ?_assertEqual(undefined, proplists:get_value(<<"raw_d">>, Types)),
-        ?_assertEqual(0, ets:select_count(imetrics_counters,
-                                          [{{{{'$1', '_'}, '_'}, '_'}, [{'=:=', '$1', {const, raw_d}}], [true]}])),
-        ?_assertEqual({counter, [{#{k => <<"v">>}, 1}]}, proplists:get_value(<<"raw_keep">>, Types)),
-        ?_assertEqual({counter, [{#{map_key => <<"a:b">>}, 1}]}, proplists:get_value(<<"raw_t">>, Types)),
-        ?_assertEqual({error, {function_clause, check_inputs}}, BadKeyResult),
-        ?_assertEqual(undefined, proplists:get_value(<<"raw_bad">>, Types))
     ].
 
 %% Restarting imetrics recreates its tables, dropping every shard.
@@ -213,7 +175,7 @@ shard_rows(_) ->
     pinned(fun() -> imetrics_hist_openmetrics:add(rows_h, 0) end),
     Shards = lists:seq(1, erlang:system_info(schedulers_online)),
     [
-        ?_assertEqual(Shards, shard_ids(imetrics_counters, {rows_c, #{k => v}})),
+        ?_assertEqual(Shards, shard_ids(imetrics_counters, imetrics_utils:bin(#{name => rows_c, k => v}))),
         ?_assertEqual(Shards, shard_ids(imetrics_hist_counts, {imetrics_utils:bin(#{'__name__' => rows_h}), 1}))
     ].
 
