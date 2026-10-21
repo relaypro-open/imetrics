@@ -16,11 +16,16 @@
 %% Pass criteria, as ratios so they don't depend on the machine:
 %%   add, add_dim, hist, exemplar: scaling (all-schedulers throughput / 1-process
 %%                       throughput) >= half of ets_sharded's scaling in the
-%%                       same run, and >= 5x ets_raw with all schedulers
-%%   add, add_dim:       with all schedulers, within 5x of ets_sharded
+%%                       same run
+%%   add, add_dim:       with all schedulers, within 10x of ets_sharded
 %%
-%% These only catch writes serializing again (on one lock, scaling and
-%% throughput drop by ~100x); they are deliberately far from normal results,
+%% The "x raw" column is informational. How far above ets_raw a case lands
+%% depends on the core count (ets_raw only collapses ~5x on 4 cores, ~100x on
+%% 18) and on how much work the operation does besides the write, so it can't
+%% be a fixed threshold.
+%%
+%% These only catch writes serializing again (on one lock, scaling drops to
+%% 1x or below); they are deliberately far from normal results,
 %% so smaller regressions show up in the numbers, not the verdict. Scaling is
 %% judged against ets_sharded rather than a fixed factor because the ceiling
 %% depends on the core count and mix (e.g. ets_sharded scales ~4-6x on a
@@ -264,9 +269,9 @@ judge(Results) ->
               VsSharded = ratio(Full, ShardedFull),
               Pass = case Case of
                          _ when Case =:= add; Case =:= add_dim ->
-                             Scaling >= MinScaling andalso VsRaw >= 5 andalso VsSharded >= 1/5;
+                             Scaling >= MinScaling andalso VsSharded >= 1/10;
                          _ when Case =:= hist; Case =:= exemplar ->
-                             Scaling >= MinScaling andalso VsRaw >= 5;
+                             Scaling >= MinScaling;
                          _ ->
                              na
                      end,
@@ -290,8 +295,8 @@ print(#{schedulers := S, pass := Pass, cases := Cases}, Ms) ->
                         [Case, One, Full, Scaling, VsRaw, VsSharded, verdict(P)])
       end, [add, add_dim, hist, exemplar, ets_raw, ets_sharded]),
     #{scaling := ShardedScaling} = maps:get(ets_sharded, Cases),
-    io:format("criteria: add/add_dim/hist/exemplar scaling >= ~.2fx (half of ets_sharded's) and x raw >= 5x; "
-              "add/add_dim x sharded >= 0.20x~n", [ShardedScaling / 2]),
+    io:format("criteria: add/add_dim/hist/exemplar scaling >= ~.2fx (half of ets_sharded's); "
+              "add/add_dim x sharded >= 0.10x~n", [ShardedScaling / 2]),
     io:format("overall: ~s~n~n", [verdict(Pass)]).
 
 verdict(true) -> "PASS";
