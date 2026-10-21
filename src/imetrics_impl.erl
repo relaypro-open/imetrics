@@ -110,19 +110,43 @@ add(Name, Value) ->
     add(Name, #{}, Value).
 
 %% Counters are sharded by scheduler: each series is stored as up to
-%% erlang:system_info(schedulers) rows keyed {TagsWithName, SchedulerId}, so
+%% erlang:system_info(schedulers) rows keyed {{Name, Tags}, SchedulerId}, so
 %% concurrent adds to the same series don't serialize on one ETS row lock.
 %% Readers sum the shards (see get_counter_points/0). The return value is the
 %% calling scheduler's shard after the increment, not the series total.
+%%
+%% Name and Tags are stored as given and converted to binaries only on read,
+%% so the hot path builds no key. A shard row is created only after its key
+%% converts (first_add/4), so an invalid key fails here, as it always has,
+%% and every stored key is known to convert. Raw keys that convert to the
+%% same binaries (an atom and a string, say) are one series on read.
+%%
+%% A tuple Name (and a tuple add_m key) is the exception: it is joined with
+%% the separator env when written, as it always was, so changing the
+%% separator later doesn't rename series already written.
 add(Name, Tags, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
             true = is_integer(Value),
-            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
-            Key = {TagsWithName, erlang:system_info(scheduler_id)},
-            ets:update_counter(imetrics_counters, Key, Value, {Key, 0})
+            Key = {{write_time_name(Name), Tags}, erlang:system_info(scheduler_id)},
+            try
+                ets:update_counter(imetrics_counters, Key, Value)
+            catch
+                error:badarg -> first_add(Name, Tags, Key, Value)
+            end
         end
     ).
+
+%% No row yet for this series on this scheduler (or no table): check the key
+%% converts, then create the row. A missing table still raises badarg.
+first_add(Name, Tags, Key, Value) ->
+    _ = imetrics_utils:bin(Tags#{ name => Name }),
+    ets:update_counter(imetrics_counters, Key, Value, {Key, 0}).
+
+write_time_name(Name) when is_tuple(Name) ->
+    imetrics_utils:bin(Name);
+write_time_name(Name) ->
+    Name.
 
 init_counter(Name) ->
     init_counter(Name, #{}).
@@ -181,6 +205,9 @@ set_exemplar(Name, Tags, EValue, Labels, Timestamp, Type) ->
 add_m(Name, Key) ->
     add_m(Name, Key, 1).
 
+%% A tuple key is joined with the separator now, not on read (see add/3).
+add_m(Name, Key, Value) when is_tuple(Key) ->
+    ?CATCH_KNOWN_EXC(add(Name, #{ map_key => imetrics_utils:bin(Key) }, Value));
 add_m(Name, Key, Value) ->
     add(Name, #{ map_key => Key }, Value).
 
@@ -427,8 +454,14 @@ delete_counter(Name, Tags) ->
     ?CATCH_KNOWN_EXC(
         begin
             TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
-            lists:foreach(fun(Shard) -> ets:delete(imetrics_counters, {TagsWithName, Shard}) end,
-                          lists:seq(1, erlang:system_info(schedulers))),
+            % any raw key that reads as this series, not just this exact term
+            Keys = ets:foldl(fun({{{N, T}, _Shard} = Key, _}, Acc) ->
+                                     case imetrics_utils:bin(T#{ name => N }) of
+                                         TagsWithName -> [Key | Acc];
+                                         _ -> Acc
+                                     end
+                             end, [], imetrics_counters),
+            lists:foreach(fun(Key) -> ets:delete(imetrics_counters, Key) end, Keys),
             ok
         end
     ).
@@ -490,11 +523,17 @@ get_mapped_counters() ->
     Dict = lists:foldl(fun get_mapped_/2, orddict:new(), get_counter_points()),
     orddict:to_list(Dict).
 
+%% Sums the shards of each raw key, then converts each distinct raw key once
+%% and merges the raw keys that read as the same series.
 -spec get_counter_points() -> [{map(), integer()}].
 get_counter_points() ->
-    Sums = ets:foldl(fun({{TagsWithName, _Shard}, Value}, Acc) ->
+    RawSums = ets:foldl(fun({{Series, _Shard}, Value}, Acc) ->
+                                maps:update_with(Series, fun(Sum) -> Sum + Value end, Value, Acc)
+                        end, #{}, imetrics_counters),
+    Sums = maps:fold(fun({Name, Tags}, Value, Acc) ->
+                             TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
                              maps:update_with(TagsWithName, fun(Sum) -> Sum + Value end, Value, Acc)
-                     end, #{}, imetrics_counters),
+                     end, #{}, RawSums),
     lists:sort(maps:to_list(Sums)).
 
 % handle metrics with a function
