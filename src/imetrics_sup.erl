@@ -19,11 +19,6 @@ start_link() ->
 %% Supervisor callbacks
 %% ===================================================================
 
--ifdef(IMETRICS_STUB).
-init([]) ->
-    SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
-    {ok, {SupFlags, []}}.
--else.
 init([]) ->
     SupFlags = #{strategy => one_for_one, intensity => 1, period => 5},
     EtsOwner = #{id => imetrics_ets_owner,
@@ -57,7 +52,6 @@ init([]) ->
                 end,
     ChildSpecs = [EtsOwner, ActorsGuildSup, VMMetricsSup] ++ HttpSpecs,
     {ok, {SupFlags, ChildSpecs}}.
--endif.
 
 slo_info() ->
     UIdNames = lists:filtermap(

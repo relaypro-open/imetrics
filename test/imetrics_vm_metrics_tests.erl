@@ -1,9 +1,6 @@
 -module(imetrics_vm_metrics_tests).
 -include_lib("eunit/include/eunit.hrl").
 
-%% These exercise the real implementation; see imetrics_stub_tests for the stub build.
--ifndef(IMETRICS_STUB).
-
 start() ->
     application:load(imetrics),
     application:set_env(imetrics, http_server_port, 8087),
@@ -100,4 +97,3 @@ http_test_vm_metrics(#{port := Port}) ->
         ?_assertEqual(200, Code2),
         ?_assertEqual(200, Code3)
     ].
--endif.

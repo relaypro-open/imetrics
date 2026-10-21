@@ -334,10 +334,9 @@ not sharded.
   histogram `add` as the bucket's total, now silently gets a smaller number
   instead of an error. Check for such uses when upgrading.
 - **Reads cost more.** Every read sums up to one row per scheduler for each
-  series, so the cost of a scrape grows with series × schedulers. With the
-  handful of series in the benchmark below the difference was within run-to-run
-  noise, but expect it to show on machines with more cores and many series.
-  This is negligible for a scraper such as Prometheus. A full read, through
+  series, so the cost of a scrape grows with series × schedulers. This is
+  negligible for a scraper such as Prometheus, but it shows on machines with
+  more cores and many series. A full read, through
   `get_counters/0`, `get_with_types/0`, `get_hist/0` or `/metrics`, scans each
   table once; `imetrics_hist_openmetrics:get_hist/1,2` and
   `imetrics:get_exemplar/1` instead look up one row per scheduler. Application
@@ -358,66 +357,3 @@ not sharded.
   now include the scheduler id, and histogram counts moved to
   `imetrics_hist_counts`, so code reading the tables directly must switch to
   the getters.
-
-### Benchmarks ###
-
-`imetrics_bench` measures write throughput from one process and from one process
-per scheduler; see its module doc. Run it with
-`rebar3 ct --suite=test/imetrics_bench_SUITE --group=bench`, or call
-`imetrics_bench:run().` from a remote shell on a live node. Its PASS/FAIL
-criteria only detect writes serializing again; compare the numbers it prints for
-smaller changes.
-
-Results from an Apple M1 Max (10 schedulers: 8 performance and 2 efficiency
-cores) on OTP 25.2, comparing imetrics before sharding, the first sharded
-version (counters and histograms sharded, write_concurrency true) and the
-current version (exemplars also sharded, write_concurrency auto). Calls per
-second, middle value of 3 runs, 200,000 calls per process:
-
-| case       | before, 1 proc | current, 1 proc | before, 10 procs | first sharded, 10 procs | current, 10 procs | speedup at 10 procs |
-|------------|---------------:|----------------:|-----------------:|------------------------:|------------------:|--------------------:|
-| `add`      |          4.12M |           4.19M |             147K |                   20.3M |             21.3M |               ~145x |
-| `add_dim`  |          2.99M |           3.05M |             145K |                   16.4M |             17.2M |               ~119x |
-| `hist`     |          1.53M |           1.57M |              84K |                   7.69M |             7.98M |                ~95x |
-| `exemplar` |           729K |            781K |             135K |                    136K |             4.54M |                ~34x |
-
-Single-process throughput is unchanged. Before sharding, 10 processes writing
-one metric got 4–18% of the throughput of one process, because they all waited
-on the same ETS row lock; sharded, they get 5–6x. Exemplars were still one row
-per bucket in the first sharded version. write_concurrency auto made little
-difference here, since each case writes one series; with 50 series updated
-from every scheduler, a raw ETS microbenchmark ran about twice as fast with
-auto as with true.
-
-On the same machine, `imetrics_sparse_write_benchmark` (4 writer processes, each
-updating its own series of one counter, with an HTTP scrape every 15 s) measured
-1.26M writes/s per writer before sharding, 1.62M in the first sharded version
-and 1.62M in the current one (middle of 3 runs). Average scrape time was 1.38,
-1.92 and 1.54 ms; each run averages only 9 scrapes of 4 series, so these don't
-show a real difference.
-
-Stub build
-----------
-
-imetrics can be compiled so that every public call is a no-op: no ETS tables,
-worker processes or HTTP server are started; the application and its top-level
-supervisor still start, with no children. Stub functions return values with
-the same shape as the real ones (e.g. `set_gauge` returns the value, getters return
-`[]` except `get_exemplar/1`, which returns `undefined`, and `get_exemplars/0`, which
-returns `#{}`, `imetrics_vm_metrics:install/0` does nothing, and `tick`/`tock` still
-measure durations), so callers don't need to change.
-
-Enable it by defining `IMETRICS_STUB` when compiling the dependency, from your
-project's `rebar.config`:
-
-```erlang
-{overrides, [{add, imetrics, [{erl_opts, [{d, 'IMETRICS_STUB'}]}]}]}.
-```
-
-To check which implementation a build is using, call `imetrics:impl()`, which
-returns `regular` or `stub`.
-
-To run imetrics' own tests against the stub build: `rebar3 as stub eunit`.
-
-Note that `cowboy` is still listed as a required application, so it must remain
-available even in a stub build.

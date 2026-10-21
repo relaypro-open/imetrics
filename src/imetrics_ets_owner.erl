@@ -41,7 +41,7 @@ init([]) ->
     ets:new(imetrics_stats, [public, named_table, {write_concurrency, auto}, {decentralized_counters, true}]),
     % histogram bucket definitions are read by every observe (find_bucket) but only written when a
     % histogram is created, so that table is read-optimized. observations are counted in per-scheduler
-    % shard rows in imetrics_hist_counts (see imetrics_hist_openmetrics_impl).
+    % shard rows in imetrics_hist_counts (see imetrics_hist_openmetrics).
     ets:new(imetrics_hist_openmetrics, [public, named_table, {read_concurrency, true}]),
     ets:new(imetrics_hist_counts, [public, named_table, {write_concurrency, auto}, {decentralized_counters, true}]),
     ets:new(imetrics_vm_metrics, [public, named_table, {write_concurrency, auto}, {decentralized_counters, true}]),

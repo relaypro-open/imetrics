@@ -3,7 +3,6 @@
 
 %% Correctness of scheduler-sharded counters and histograms: every read must
 %% sum the shards and return exactly what the unsharded implementation did.
--ifndef(IMETRICS_STUB).
 
 -define(PROCS, 32).
 -define(CALLS, 10000).
@@ -146,8 +145,8 @@ delete(_) ->
     imetrics_hist_openmetrics:new(del_h, [1]),
     imetrics_hist_openmetrics:new(del_h, #{k => v}, [1]),
     par(fun() -> imetrics_hist_openmetrics:add(del_h, 0) end),
-    ok = imetrics_impl:delete_counter(del_c, #{k => v}),
-    ok = imetrics_hist_openmetrics_impl:delete(del_h, #{}),
+    ok = imetrics:delete_counter(del_c, #{k => v}),
+    ok = imetrics_hist_openmetrics:delete(del_h, #{}),
     Hist = imetrics_hist_openmetrics:get_all(),
     [
         ?_assertEqual(undefined, proplists:get_value(<<"del_c">>, imetrics:get_with_types())),
@@ -158,7 +157,7 @@ delete(_) ->
         % the tagged series of the same histogram is untouched
         ?_assertEqual([{#{le => <<"1">>, k => <<"v">>}, 0}, {#{le => <<"+Inf">>, k => <<"v">>}, 0}],
                       proplists:get_value(<<"del_h">>, Hist)),
-        ?_assertEqual(ok, imetrics_hist_openmetrics_impl:delete(del_h, #{k => v})),
+        ?_assertEqual(ok, imetrics_hist_openmetrics:delete(del_h, #{k => v})),
         ?_assertEqual(undefined, proplists:get_value(<<"del_h">>, imetrics_hist_openmetrics:get_all()))
     ].
 
@@ -177,7 +176,7 @@ raw_keys(_) ->
     imetrics:add(raw_d, #{k => v}),
     imetrics:add(raw_d, #{k => "v"}),
     imetrics:add(raw_keep, #{k => v}),
-    ok = imetrics_impl:delete_counter(raw_d, #{k => <<"v">>}),
+    ok = imetrics:delete_counter(raw_d, #{k => <<"v">>}),
     % a tuple add_m key keeps the separator in effect when it was written
     application:set_env(imetrics, separator, <<":">>),
     imetrics:add_m(raw_t, {a, b}),
@@ -391,5 +390,3 @@ fixture_get_with_types() ->
      {<<"fx_tuple">>,{counter,[{#{},3}]}},
      {<<"fx_zero">>,{counter,[{#{},0}]}},
      {<<"fx_zero_tagged">>,{counter,[{#{k => <<"v">>},0}]}}].
-
--endif.

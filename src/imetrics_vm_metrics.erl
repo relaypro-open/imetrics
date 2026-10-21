@@ -98,13 +98,8 @@ code_change(_OldVsn, State, _Extras) ->
     {ok, State}.
 
 % designed to be called only once
--ifdef(IMETRICS_STUB).
-install() ->
-    ok.
--else.
 install() ->
     gen_server:call(?MODULE, install).
--endif.
 
 % A modification of recon:proc_count that allows you to fetch multiple
 % attributes without calling process_info multiple times.

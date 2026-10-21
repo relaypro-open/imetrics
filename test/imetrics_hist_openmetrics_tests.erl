@@ -1,9 +1,6 @@
 -module(imetrics_hist_openmetrics_tests).
 -include_lib("eunit/include/eunit.hrl").
 
-%% These exercise the real implementation; see imetrics_stub_tests for the stub build.
--ifndef(IMETRICS_STUB).
-
 start() ->
     application:ensure_all_started(imetrics),
     #{}.
@@ -196,4 +193,3 @@ exemplar_test(_Fixture) ->
         ?_assertEqual(true, imetrics_hist_openmetrics:set_exemplar(simple_range_tagged, #{test_tag => "test_value"}, 0.8)),
         ?_assertMatch({0.8, #{}, _}, imetrics:get_exemplar(#{'__name__' => <<"simple_range_tagged">>, le => <<"1">>, test_tag => <<"test_value">>}))
     ].
--endif.

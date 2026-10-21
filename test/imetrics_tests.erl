@@ -1,9 +1,6 @@
 -module(imetrics_tests).
 -include_lib("eunit/include/eunit.hrl").
 
-%% These exercise the real implementation; see imetrics_stub_tests for the stub build.
--ifndef(IMETRICS_STUB).
-
 start() ->
     application:load(imetrics),
     application:set_env(imetrics, http_server_port, 8086),
@@ -14,9 +11,6 @@ stop(_Fixture) ->
     application:stop(imetrics).
 
 %% add tests
-impl_test() ->
-    ?assertEqual(regular, imetrics:impl()).
-
 add_test_() ->
     {setup,
         fun start/0,
@@ -704,5 +698,3 @@ ticktock_s_test(_Fixture) ->
                                      Result
                              end)())
     ].
-
--endif.
