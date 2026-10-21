@@ -8,6 +8,7 @@ Dependencies
 ------------
 
 - *No R16 support*: We require the "newer" ets functions such as ets:update_counter/4.
+- *OTP 25 or later*: tables are created with `{write_concurrency, auto}`, which older releases reject.
 - *cowboy*: The `cowboy` application (and its dependencies) must be started before you start `imetrics`
   - `cowboy` depends on `ranch`, `cowlib`, `ssl`, and `crypto` [(see here)](https://ninenines.eu/docs/en/cowboy/2.8/manual/)
 
@@ -113,6 +114,10 @@ imetrics_hist_openmetrics:new(http_response_time, [0, 0.01, 0.05, 0.1, 0.2, 1, 1
 imetrics_hist_openmetrics:new(packet_size, [0, 1000], 251).
 ```
 
+Calling `new` again for an existing histogram (the same name and tags) resets its counts to zero. The
+reset is not atomic with concurrent observations: an `add` running at the same time may be counted in the
+reset histogram or lost.
+
  Histograms are incremented by indicating a continuous value, which will add one to the bucket in which that value would fall.
 
  ```erlang
@@ -157,8 +162,10 @@ Finally, exemplars can attach a timestamp. If left undefined, the timestamp will
 Timestamps should be in seconds from Unix Epoch, and do not need to be integers.
 If exemplars are not updated between queries, additional copies of the exemplar will not be generated,
 so creating exemplars on infrequent events will not result in overpopulation of the data set.
-Additionally, whenever `set_exemplar` is called, the previous exemplar associated with the given
-name and tags will be overwritten, meaning only the most recently passed exemplar will be stored at any given time.
+Additionally, only the most recent exemplar for a given name and tags is reported: exemplars are
+stored per scheduler (see [Concurrency](#concurrency)), and reads return the one with the newest timestamp.
+If you pass timestamps yourself, an exemplar set later with an older timestamp is not reported while a newer
+one exists on another scheduler. If two exemplars have the same timestamp, either may be reported.
 `imetrics:set_exemplar`, when called without a type identifier, or when called with a type of `counter`, does not check to see if the added exemplar is associated with any actual values, and will always return true. `imetrics_hist_openmetrics:set_exemplar`, or `imetrics:set_exemplar` with type `histogram`, works slightly differently, in that the value provided for the exemplar determines which bucket it is associated with in the histogram, and if the function is called for a histogram/tag combination that does not exist, this function will return `{error, {badarg, check_ets}}`.
 ```erlang
 %Minimal set_exemplar
@@ -221,8 +228,8 @@ a map of tag permutations, with the value corresponding to each tag permutation.
 > imetrics:get_with_types().
 [{<<"client_connections">>,{counter,[{#{},1}]}},
  {<<"http_responses">>,
-  {counter,[{#{code => <<"404">>},1},
-            {#{code => <<"200">>},1}]}},
+  {counter,[{#{code => <<"200">>},1},
+            {#{code => <<"404">>},1}]}},
  {<<"cpu_load_avg">>,
   {gauge,[{#{granularity => <<"1min">>},0.1},
           {#{granularity => <<"5min">>},3.4}]}},
@@ -239,8 +246,8 @@ $ curl localhost:8085/metrics
 # TYPE client_connections counter
 client_connections_total{} 1
 # TYPE http_responses counter
-http_responses_total{code="404"} 1
 http_responses_total{code="200"} 1
+http_responses_total{code="404"} 1
 # TYPE cpu_load_avg gauge
 cpu_load_avg{granularity="1min"} 0.1
 cpu_load_avg{granularity="5min"} 3.4
@@ -301,3 +308,52 @@ Configuration
 | `strict_openmetrics_compat`   | `false`   | If set to `true`, metrics will only display on the old HTTP endpoint if they aren't compatible with the OpenMetrics endpoint. Metrics will only display on one endpoint or the other, never both. |
 | `openmetrics_exemplar_compat` | `false`   | If set to `true`, counters will display with _total appended to their end, and exemplars will be displayed for counters. When `false`, counters will not get the appended suffix, and exemplars will not be displayed on counters. |
 | `hist_max_buckets`            | `64`      | Upper limit on the number of buckets for histograms. Calls to create a histogram with more buckets than this value will fail. |
+
+Concurrency
+-----------
+
+Counter and histogram writes are sharded by scheduler: each counter series and
+histogram bucket is stored as up to `erlang:system_info(schedulers)` ETS rows,
+keyed by the writing scheduler's id, and every read sums the shards. Concurrent
+writes to the same metric therefore don't serialize on one ETS row lock.
+
+Because of this, `imetrics:add/1,2,3` and `imetrics:add_m/2,3` return the
+calling scheduler's shard value after the increment, not the counter's total,
+and `imetrics_hist_openmetrics:add/2,3` returns `{Bucket, ShardCount}`. Read
+totals with `imetrics:get_counters/0`, `imetrics:get_with_types/0`,
+`imetrics_hist_openmetrics:get_hist/1,2` or the HTTP endpoints. Exemplars are
+sharded the same way, and `imetrics:get_exemplar/1` returns the one with the
+newest timestamp across the shards; `imetrics:get_exemplars/0` returns every
+exemplar that way in one scan, as a map keyed like `get_exemplar/1`. Gauges are
+not sharded.
+
+### Trade-offs ###
+
+- **Callers that used the return value of `add`.** A caller that treated the
+  result of `add`/`add_m` as the counter's total, or the second element of a
+  histogram `add` as the bucket's total, now silently gets a smaller number
+  instead of an error. Check for such uses when upgrading.
+- **Reads cost more.** Every read sums up to one row per scheduler for each
+  series, so the cost of a scrape grows with series × schedulers. This is
+  negligible for a scraper such as Prometheus, but it shows on machines with
+  more cores and many series. A full read, through
+  `get_counters/0`, `get_with_types/0`, `get_hist/0` or `/metrics`, scans each
+  table once; `imetrics_hist_openmetrics:get_hist/1,2` and
+  `imetrics:get_exemplar/1` instead look up one row per scheduler. Application
+  code calling any of these in a hot path pays that cost on every call.
+- **Memory grows the same way.** A counter series, histogram bucket or
+  exemplar written from many schedulers can take up to one ETS row per
+  scheduler instead of one row in total. Measured on OTP 25 (64-bit), a shard
+  row takes roughly 200–400 bytes for a counter or histogram bucket, depending
+  on how many tags it has, and about 500 bytes for an exemplar with two labels.
+  For example, 1,000 counter series written from all 32 schedulers of a machine
+  take about 7–13 MB, where unsharded they took well under 1 MB. This matters
+  mostly for high-cardinality counters on machines with many cores.
+- **Point order.** Points within a counter, in `get_with_types/0` and on
+  `/metrics`, now come out sorted by tags instead of in ETS hash order. The
+  order was never guaranteed, but output diffs between versions will show
+  lines moving.
+- **ETS layout.** imetrics' ETS tables are internal. Counter and exemplar keys
+  now include the scheduler id, and histogram counts moved to
+  `imetrics_hist_counts`, so code reading the tables directly must switch to
+  the getters.

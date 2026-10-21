@@ -64,7 +64,12 @@
     get_hist/0,
     foldl_slo/3,
     get_slo/2,
-    get_exemplar/1
+    get_exemplar/1,
+    get_exemplars/0
+]).
+
+-export([
+    delete_counter/2
 ]).
 
 -compile({no_auto_import,[get/0]}).
@@ -99,12 +104,18 @@ add(Name, Tags) when is_map(Tags) ->
 add(Name, Value) ->
     add(Name, #{}, Value).
 
+%% Counters are sharded by scheduler: each series is stored as up to
+%% erlang:system_info(schedulers) rows keyed {TagsWithName, SchedulerId}, so
+%% concurrent adds to the same series don't serialize on one ETS row lock.
+%% Readers sum the shards (see get_counter_points/0). The return value is the
+%% calling scheduler's shard after the increment, not the series total.
 add(Name, Tags, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
             true = is_integer(Value),
             TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
-            ets:update_counter(imetrics_counters, TagsWithName, Value, {TagsWithName, 0})
+            Key = {TagsWithName, erlang:system_info(scheduler_id)},
+            ets:update_counter(imetrics_counters, Key, Value, {Key, 0})
         end
     ).
 
@@ -156,7 +167,8 @@ set_exemplar(Name, Tags, EValue, Labels, Timestamp, Type) ->
                 counter ->
                     BinList = imetrics_utils:bin(Labels),
                     TagsWithName = imetrics_utils:bin(Tags#{ '__name__' => Name }),
-                    ets:insert(imetrics_exemplars, {TagsWithName, EValue, BinList, Timestamp})
+                    % sharded by scheduler like counters; see get_exemplar/1
+                    ets:insert(imetrics_exemplars, {{TagsWithName, erlang:system_info(scheduler_id)}, EValue, BinList, Timestamp})
             end
         end
     ).
@@ -358,14 +370,14 @@ get() ->
 
 get_with_types() ->
     Info = [{MetricName, {info, MetricPoints}} || {MetricName, MetricPoints} <- get_unmapped(imetrics_info)],
-    Counters = [{MetricName, {counter, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_counters)],
+    Counters = [{MetricName, {counter, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped_counters()],
     Gauges = [{MetricName, {gauge, MetricPoints}} || {MetricName, MetricPoints} <- get_mapped(imetrics_gauges)],
     Stats = [{MetricName, {stat, MetricPoints}} || {MetricName, MetricPoints} <- get_unmapped(imetrics_stats)],
     Histograms = [{MetricName, {histogram, MetricPoints}} || {MetricName, MetricPoints} <- imetrics_hist_openmetrics:get_all()],
     Info ++ Counters ++ Gauges ++ Stats ++ Histograms.
 
 get_counters() ->
-    Counters = get_mapped(imetrics_counters),
+    Counters = get_mapped_counters(),
     Counters2 = simplify_unmapped(Counters),
     Counters3 = simplify_mapped(Counters2, true),
     Counters3.
@@ -376,16 +388,45 @@ get_gauges() ->
     Gauges3 = simplify_mapped(Gauges2, true),
     Gauges3.
 
+%% Exemplars are stored one row per scheduler, keyed {Key, SchedulerId}, so
+%% concurrent set_exemplar calls don't serialize on one ETS row lock. The
+%% exemplar with the newest timestamp across the shards is returned.
 get_exemplar(Key) ->
-    case ets:lookup(imetrics_exemplars, Key) of
-        [] ->
-            undefined;
-        [{_Name, EValue, Labels, Timestamp}] ->
-            {EValue, Labels, Timestamp}
-    end.
+    lists:foldl(fun(Shard, Newest) ->
+                        case ets:lookup(imetrics_exemplars, {Key, Shard}) of
+                            [{_, EValue, Labels, Timestamp}]
+                              when Newest =:= undefined; Timestamp > element(3, Newest) ->
+                                {EValue, Labels, Timestamp};
+                            _ ->
+                                Newest
+                        end
+                end, undefined, lists:seq(1, erlang:system_info(schedulers))).
+
+%% Every exemplar in one scan of the table, as a map from the key get_exemplar/1
+%% takes to what it would return: the newest exemplar across the shards.
+get_exemplars() ->
+    ets:foldl(fun({{Key, _Shard}, EValue, Labels, Timestamp}, Acc) ->
+                      case Acc of
+                          #{Key := {_, _, Newest}} when Newest >= Timestamp -> Acc;
+                          _ -> Acc#{Key => {EValue, Labels, Timestamp}}
+                      end
+              end, #{}, imetrics_exemplars).
 
 get_hist() ->
     imetrics_hist_openmetrics:get_all().
+
+%% Removes every scheduler shard of one counter series, so it no
+%% longer appears in any read.
+-spec delete_counter(term(), map()) -> ok | {error, term()}.
+delete_counter(Name, Tags) ->
+    ?CATCH_KNOWN_EXC(
+        begin
+            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
+            lists:foreach(fun(Shard) -> ets:delete(imetrics_counters, {TagsWithName, Shard}) end,
+                          lists:seq(1, erlang:system_info(schedulers))),
+            ok
+        end
+    ).
 
 foldl_slo(UIdName, F, A) ->
     imetrics_slo:foldl_dump(UIdName, F, A).
@@ -434,6 +475,19 @@ get_unmapped(T) ->
 get_mapped(T) ->
     Dict = ets:foldl(fun get_mapped_/2, orddict:new(), T),
     orddict:to_list(Dict).
+
+% like get_mapped(imetrics_counters), but sums each series' scheduler shards first.
+% Points within a metric come out sorted by tags.
+get_mapped_counters() ->
+    Dict = lists:foldl(fun get_mapped_/2, orddict:new(), get_counter_points()),
+    orddict:to_list(Dict).
+
+-spec get_counter_points() -> [{map(), integer()}].
+get_counter_points() ->
+    Sums = ets:foldl(fun({{TagsWithName, _Shard}, Value}, Acc) ->
+                             maps:update_with(TagsWithName, fun(Sum) -> Sum + Value end, Value, Acc)
+                     end, #{}, imetrics_counters),
+    lists:sort(maps:to_list(Sums)).
 
 % handle metrics with a function
 get_mapped_({#{ name := Name } = Tags, ValueFun}, MappedDict0) when is_function(ValueFun) ->
@@ -538,4 +592,3 @@ tock_s_name_match(Ticks, Name) ->
         MapMatchFun({__K, __V, I2}) ->
             MapMatchFun(maps:next(I2))
     end(maps:next(I)).
-

@@ -33,7 +33,9 @@ add_test(_Fixture) ->
         ?_assertEqual(1, imetrics:add_m("list_m", "list_k")),
         ?_assertEqual(5, imetrics:add_m("list_m", "list_k_set", 5)),
         ?_assertEqual(1, imetrics:add_m(atom_m, 200)),
-        ?_assertEqual(5, imetrics:add(many_incr)),
+        % add returns the calling scheduler's shard, so check the total via get_counters
+        ?_assertMatch(N when is_integer(N), imetrics:add(many_incr)),
+        ?_assertEqual(5, proplists:get_value(<<"many_incr">>, imetrics:get_counters())),
         ?_assertEqual(1, imetrics:add({a,b,c})),
         ?_assertEqual(1, imetrics:add(200)),
         ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i})),
@@ -625,24 +627,25 @@ start_ticktock() ->
     imetrics:hist(test3, #{tag => tag2}, [1, 10]),
     F.
 
+%% durations are in whole seconds, so a 5ms sleep that crosses a second boundary reads 1
 ticktock_test(_Fixture) ->
     [
-        ?_assertEqual(0, (fun() ->
+        ?_assertMatch(N when N =:= 0; N =:= 1, (fun() ->
                     Tick = imetrics:tick(test, second),
                     timer:sleep(5),
                     imetrics:tock(Tick)
             end)()),
-        ?_assertEqual(0, (fun() ->
+        ?_assertMatch(N when N =:= 0; N =:= 1, (fun() ->
                     Tick = imetrics:tick(test, second),
                     timer:sleep(5),
                     imetrics:tock_as(Tick, test2)
             end)()),
-        ?_assertEqual(0, (fun() ->
+        ?_assertMatch(N when N =:= 0; N =:= 1, (fun() ->
                     Tick = imetrics:tick(test3, #{tag => tag1}, second),
                     timer:sleep(5),
                     imetrics:tock(Tick)
             end)()),
-        ?_assertEqual(0, (fun() ->
+        ?_assertMatch(N when N =:= 0; N =:= 1, (fun() ->
                     Tick = imetrics:tick(test3, #{tag => tag2}, second),
                     timer:sleep(5),
                     imetrics:tock(Tick)
@@ -681,14 +684,14 @@ ticktock_s_test_() ->
 
 ticktock_s_test(_Fixture) ->
     [
-     ?_assertMatch(0, (fun() ->
+     ?_assertMatch(N when N =:= 0; N =:= 1, (fun() ->
                                      {Ref, Ticks} = imetrics:tick_s(#{}, test, second),
                                      timer:sleep(5),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, Ref),
                                      0 = map_size(Ticks2),
                                      Result
                              end)()),
-     ?_assertMatch(0, (fun() ->
+     ?_assertMatch(N when N =:= 0; N =:= 1, (fun() ->
                                      {_Ref, Ticks} = imetrics:tick_s(#{}, test, second),
                                      timer:sleep(5),
                                      {Result, Ticks2} = imetrics:tock_s(Ticks, test),

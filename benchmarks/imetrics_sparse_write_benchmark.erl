@@ -163,9 +163,16 @@ output_report(WriteData, ReadData) ->
 
     io:format("=====================~n~n"),
 
+    % one file per direction, since github-action-benchmark treats a file as
+    % either "smaller is better" or "bigger is better"
     {ok, File} = file:open("./benchmark_results.json", [write]),
     io:format(File, "[~n", []),
-    io:format(File, "{\"name\": \"HTTP Response Time (avg)\", \"unit\": \"microseconds\", \"value\": ~p},~n", [HttpSum / HttpSamples]),
-    io:format(File, "{\"name\": \"Metrics throughput (avg between workers)\", \"unit\": \"metrics/second\", \"value\": ~p}~n", [WorkerSum / ?WorkerProcesses]),
+    io:format(File, "{\"name\": \"HTTP Response Time (avg)\", \"unit\": \"microseconds\", \"value\": ~p}~n", [HttpSum / HttpSamples]),
     io:format(File, "]~n", []),
-    file:close(File).
+    file:close(File),
+
+    {ok, ThroughputFile} = file:open("./benchmark_results_throughput.json", [write]),
+    io:format(ThroughputFile, "[~n", []),
+    io:format(ThroughputFile, "{\"name\": \"Metrics throughput (avg between workers)\", \"unit\": \"metrics/second\", \"value\": ~p}~n", [WorkerSum / ?WorkerProcesses]),
+    io:format(ThroughputFile, "]~n", []),
+    file:close(ThroughputFile).

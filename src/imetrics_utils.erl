@@ -15,7 +15,12 @@ bin(T) when is_tuple(T) andalso tuple_size(T) =< 8 ->
     L2 = [ bin(X) || X <- L ],
     binary_join(L2, application:get_env(imetrics, separator, <<"_">>));
 bin(M) when is_map(M) ->
-    maps:map(fun (_Key, Value) -> bin(Value) end, M).
+    % Surprising finding: previous code using maps:map with an anonymous function
+    % performs measurably worse on OTP <= 26 due to the repeated creation of the
+    % anonymous function. Using a list comprehension solves this on OTP 25. In
+    % later OTP releases, anonymous functions without free variables are created
+    % as literals in the module.
+    maps:from_list([{Key, bin(Value)} || {Key, Value} <- maps:to_list(M)]).
 
 -spec binary_join([binary()], binary()) -> binary().
 binary_join([], _Sep) ->
