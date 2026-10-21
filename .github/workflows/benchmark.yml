@@ -25,18 +25,43 @@ jobs:
             - name: Run benchmark
               run: erl -noshell -pa $(./rebar3 path --lib)/imetrics/benchmarks -pa $(./rebar3 path) -s imetrics_sparse_write_benchmark -eval 'init:stop().'
 
+            - name: Run contended write benchmark
+              run: erl -noshell -pa $(./rebar3 path --lib)/imetrics/benchmarks -pa $(./rebar3 path) -s imetrics_contended_write_benchmark -eval 'init:stop().'
+
             - name: Download previous benchmark data
               uses: actions/cache@v4
               with:
                   path: ./cache
                   key: ${{ runner.os }}-benchmark
 
-            - name: Track benchmark in GH comments
+            - name: Track response time in GH comments
               uses: benchmark-action/github-action-benchmark@v1.20.4
               with:
                   tool: "customSmallerIsBetter"
                   output-file-path: "benchmark_results.json"
                   external-data-json-path: ./cache/benchmark-data.json
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  comment-on-alert: true
+                  summary-always: true
+
+            - name: Track write throughput in GH comments
+              uses: benchmark-action/github-action-benchmark@v1.20.4
+              with:
+                  name: Write throughput
+                  tool: "customBiggerIsBetter"
+                  output-file-path: "benchmark_results_throughput.json"
+                  external-data-json-path: ./cache/benchmark-throughput-data.json
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  comment-on-alert: true
+                  summary-always: true
+
+            - name: Track contended write benchmark in GH comments
+              uses: benchmark-action/github-action-benchmark@v1.20.4
+              with:
+                  name: Contended write benchmark
+                  tool: "customBiggerIsBetter"
+                  output-file-path: "benchmark_results_contended.json"
+                  external-data-json-path: ./cache/benchmark-contended-data.json
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   comment-on-alert: true
                   summary-always: true
