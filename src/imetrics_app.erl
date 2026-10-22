@@ -10,6 +10,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
+    persistent_term:put({imetrics, separator}, application:get_env(imetrics, separator, <<"_">>)),
     imetrics_sup:start_link().
 
 stop(_State) ->

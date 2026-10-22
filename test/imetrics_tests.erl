@@ -38,7 +38,8 @@ add_test(_Fixture) ->
         ?_assertEqual(5, proplists:get_value(<<"many_incr">>, imetrics:get_counters())),
         ?_assertEqual(1, imetrics:add({a,b,c})),
         ?_assertEqual(1, imetrics:add(200)),
-        ?_assertEqual({error,{function_clause,check_inputs}}, imetrics:add({a,b,c,d,e,f,g,h,i})),
+        % not checked on write; a key that doesn't convert is left out of reads
+        ?_assert(is_integer(imetrics:add({a,b,c,d,e,f,g,h,i}))),
         ?_assertEqual({error,{badmatch,check_inputs}}, imetrics:add(bad, map))
     ].
 
@@ -185,6 +186,30 @@ init_counter_test(_Fixture) ->
                                                                              ))
     ].
 
+%% the separator is read once, when the application starts
+separator_test_() ->
+    {setup,
+        fun() ->
+                application:load(imetrics),
+                application:set_env(imetrics, http_server_port, 8086),
+                application:set_env(imetrics, separator, <<":">>),
+                application:ensure_all_started(imetrics),
+                #{}
+        end,
+        fun(Fixture) ->
+                stop(Fixture),
+                application:unset_env(imetrics, separator)
+        end,
+        fun(_Fixture) ->
+                imetrics:add({counter, tuple, colon}),
+                imetrics:add_m(mapped_colon, {key, tuple}),
+                [
+                    ?_assertEqual(<<"a:b">>, imetrics_utils:bin({a, b})),
+                    ?_assertEqual({counter, [{#{}, 1}]}, proplists:get_value(<<"counter:tuple:colon">>, imetrics:get_with_types())),
+                    ?_assertEqual({counter, [{#{map_key => <<"key:tuple">>}, 1}]}, proplists:get_value(<<"mapped_colon">>, imetrics:get_with_types()))
+                ]
+        end}.
+
 %% get tests
 get_test_() ->
     {setup,
@@ -203,9 +228,6 @@ start_get() ->
     imetrics:set_gauge(fn_gauge, fun() -> 1.5 end),
     imetrics:set_gauge(fn_gauge_timeout, fun() -> timer:sleep(6000), 1 end),
     imetrics:add({counter, tuple}),
-    application:set_env(imetrics, separator, <<":">>),
-    imetrics:add({counter, tuple, colon}),
-    application:unset_env(imetrics, separator),
     Stats = imetrics:stats(stats),
     Stats2 = imetrics_stats:update(10, Stats),
     imetrics:set_stats(stats, Stats2),
@@ -313,7 +335,6 @@ http_test_varz(#{port := Port}) ->
         "counter2 1",
         "counter3_invalid_exemplar 1",
         "counter4_invalid_exemplar 1",
-        "counter:tuple:colon 1",
         "counter_tuple 1",
         "mapped_counter key:1",
         "fn_gauge 1.5",
@@ -343,8 +364,6 @@ http_test_openmetrics(#{port := Port}) ->
         "counter3_invalid_exemplar{} 1",
         "# TYPE counter4_invalid_exemplar counter",
         "counter4_invalid_exemplar{} 1",
-        "# TYPE counter:tuple:colon counter",
-        "counter:tuple:colon{} 1",
         "# TYPE counter_tuple counter",
         "counter_tuple{} 1",
         "# TYPE imetrics_metric_fun_timeout counter",
@@ -452,8 +471,6 @@ http_test_openmetrics_strict(#{port := Port}) ->
         "counter3_invalid_exemplar{} 1",
         "# TYPE counter4_invalid_exemplar counter",
         "counter4_invalid_exemplar{} 1",
-        "# TYPE counter:tuple:colon counter",
-        "counter:tuple:colon{} 1",
         "# TYPE counter_tuple counter",
         "counter_tuple{} 1",
         "# TYPE imetrics_metric_fun_timeout counter",
@@ -541,8 +558,6 @@ http_test_openmetrics_exemplars(#{port := Port}) ->
         "counter3_invalid_exemplar_total{} 1",
         "# TYPE counter4_invalid_exemplar counter",
         "counter4_invalid_exemplar_total{} 1",
-        "# TYPE counter:tuple:colon counter",
-        "counter:tuple:colon_total{} 1",
         "# TYPE counter_tuple counter",
         "counter_tuple_total{} 1",
         "# TYPE imetrics_metric_fun_timeout counter",
