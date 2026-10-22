@@ -484,14 +484,22 @@ get_unmapped(T) ->
     lists:reverse(Acc).
 
 get_mapped(T) ->
-    Dict = ets:foldl(fun get_mapped_/2, orddict:new(), T),
-    orddict:to_list(Dict).
+    finish_mapped(ets:foldl(fun get_mapped_/2, #{}, T)).
 
 % like get_mapped(imetrics_counters), but sums each series' scheduler shards first.
 % Points within a metric come out sorted by tags.
 get_mapped_counters() ->
-    Dict = lists:foldl(fun get_mapped_/2, orddict:new(), get_counter_points()),
-    orddict:to_list(Dict).
+    finish_mapped(lists:foldl(fun get_mapped_/2, #{}, get_counter_points())).
+
+% get_mapped_/2 builds each metric's points in reverse. finish_mapped/1 puts everything
+% back into the expected order.
+finish_mapped(Mapped) ->
+    [{Name, lists:reverse(Points)} || {Name, Points} <- lists:sort(maps:to_list(Mapped))].
+
+% Keeping the growing accumulator on the right avoids O(n^2) performance.
+prepend_points(Name, Points, Mapped) ->
+    Reversed = lists:reverse(Points),
+    maps:update_with(Name, fun(Old) -> Reversed ++ Old end, Reversed, Mapped).
 
 %% Sum by shard first, then convert {Name, Tags} to binary and sum again.
 -spec get_counter_points() -> [{map(), integer()}].
@@ -534,12 +542,12 @@ get_mapped_({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key(
         end,
     
     Tags4 = maps:remove(name, Tags3),
-    orddict:append_list(Name, [{Tags4, Value}], MappedDict0);
+    prepend_points(Name, [{Tags4, Value}], MappedDict0);
 
 % handle multigauge metrics
 get_mapped_({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) ->
     List = get_mapped_multigauge(ets:lookup(imetrics_map_keys, Name), Value),
-    orddict:append_list(Name, List, MappedDict0);
+    prepend_points(Name, List, MappedDict0);
 
 % all other metrics we ignore
 get_mapped_(_, MappedDict0) ->
