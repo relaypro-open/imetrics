@@ -104,6 +104,33 @@ no_warnings_test_() ->
     [?_assertEqual(ok, compile_probe(imetrics_macro_warn_none, none, Body)),
      ?_assertEqual(ok, compile_probe(imetrics_macro_warn_all, all, Body))].
 
+%% Used as statements, which is the usual way, a compiled-out call must not make
+%% the compiler warn that a term is built and never used, whatever value it has.
+%% (tick_s is left out: its value, the ref, is the point of calling it.)
+statement_position_test_() ->
+    Body = "go(X) ->\n"
+           "    ?IMETRICS_ADD(debug, a, X),\n"
+           "    ?IMETRICS_ADD_M(debug, a, X),\n"
+           "    ?IMETRICS_SET_GAUGE(debug, g, X),\n"
+           "    ?IMETRICS_SET_INFO(debug, i, X),\n"
+           "    ?IMETRICS_SET_EXEMPLAR(debug, e, X),\n"
+           "    ?IMETRICS_SET_MULTIGAUGE(debug, m, X),\n"
+           "    ?IMETRICS_SET_COUNTER_DIMENSION(debug, g, X),\n"
+           "    ?IMETRICS_REGISTER_SLO(debug, u, X),\n"
+           "    ?IMETRICS_HIST(debug, h, X),\n"
+           "    ?IMETRICS_HIST_ADD(debug, h, X),\n"
+           "    ?IMETRICS_HIST_NEW(debug, h, X),\n"
+           "    ?IMETRICS_HIST_SET_EXEMPLAR(debug, h, X),\n"
+           "    ?IMETRICS_TICK(debug, q),\n"
+           "    ?IMETRICS_TOCK(debug, X),\n"
+           "    ?IMETRICS_TOCK_S(debug, X, q),\n"
+           "    ?IMETRICS_STOP_TICK_S(debug, X, q),\n"
+           "    ?IMETRICS_STATS(debug, s),\n"
+           "    ?IMETRICS_SET_STATS(debug, s, X),\n"
+           "    ok.\n",
+    [?_assertEqual(ok, compile_probe(imetrics_macro_stmt_none, none, Body)),
+     ?_assertEqual(ok, compile_probe(imetrics_macro_stmt_info, info, Body))].
+
 %% A level that is not a logger level is a compile warning, not a silent no-op.
 bad_level_test_() ->
     Body = "go() -> ?IMETRICS_ADD(infoo, ctr).\n",
@@ -202,7 +229,39 @@ all_macros_disabled_test_() ->
                       ?assertEqual([], mac_metric_names()),
                       ?assertEqual([], [N || N <- counters(), binary:match(N, <<"mac_">>) =/= nomatch])
               end,
-              ?_assertEqual(ok, imetrics_macro_all_disabled:slo())]
+              ?_assertEqual({ok, undefined}, imetrics_macro_all_disabled:slo())]
+     end}.
+
+%% What a macro hands back when it is compiled out has the same type as what
+%% the imetrics function returns (a number where it returns a counter value,
+%% true where it returns true, a reference where it returns one, ...), so code
+%% that uses the value keeps working. Compares the two builds of one probe.
+kind(X) when is_number(X) -> number;
+kind(X) when is_boolean(X) -> X;
+kind(X) when is_atom(X) -> atom;
+kind(X) when is_binary(X) -> binary;
+kind(X) when is_reference(X) -> reference;
+kind(X) when is_pid(X) -> pid;
+kind(X) when is_function(X) -> function;
+kind(X) when is_map(X) -> map;
+kind(X) when is_list(X) -> list;
+kind(X) when is_tuple(X) -> {tuple, [kind(E) || E <- tuple_to_list(X)]}.
+
+disabled_matches_enabled_types_test_() ->
+    {setup, fun start/0, fun stop/1,
+     fun(_) ->
+             [?_assertEqual(ok, compile_probe(imetrics_macro_types_on, all, all_calls_body())),
+              ?_assertEqual(ok, compile_probe(imetrics_macro_types_off, none, all_calls_body())),
+              fun() ->
+                      On = [kind(R) || R <- call_all(imetrics_macro_types_on)],
+                      Off = [kind(R) || R <- call_all(imetrics_macro_types_off)],
+                      ?assertEqual(length(On), length(Off)),
+                      %% name the macro position that differs
+                      ?assertEqual([], [{N, A, B} || {N, A, B} <- lists:zip3(lists:seq(1, length(On)), On, Off), A =/= B])
+              end,
+              %% register_slo starts a server, so only the compiled-out value is checked;
+              %% it has no pid (a tuple holding a call would make a statement warn)
+              ?_assertEqual({ok, undefined}, imetrics_macro_types_off:slo())]
      end}.
 
 %% ---------------------------------------------------------------------------
@@ -221,10 +280,10 @@ disabled_returns_test_() ->
            "set_stats(S) -> ?IMETRICS_SET_STATS(debug, s, S).\n",
     Ticks = #{some => tick},
     [?_assertEqual(ok, compile_probe(imetrics_macro_returns, info, Body)),
-     ?_assertEqual(ok, imetrics_macro_returns:tick()),
+     ?_assertEqual({undefined, native, 0}, imetrics_macro_returns:tick()),
      ?_assertEqual(0, imetrics_macro_returns:tock(imetrics_macro_returns:tick())),
      ?_assertEqual(0, imetrics_macro_returns:tock_as(imetrics_macro_returns:tick())),
-     ?_assertEqual({ok, Ticks}, imetrics_macro_returns:tick_s(Ticks)),
+     ?_assertMatch({Ref, Ticks} when is_reference(Ref), imetrics_macro_returns:tick_s(Ticks)),
      ?_assertEqual({some_ref, Ticks}, imetrics_macro_returns:tick_s(Ticks, some_ref)),
      ?_assertEqual({0, Ticks}, imetrics_macro_returns:tock_s(Ticks, some_ref)),
      ?_assertEqual({0, Ticks}, imetrics_macro_returns:tock_as_s(Ticks, some_ref)),

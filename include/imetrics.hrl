@@ -24,8 +24,9 @@
 %%          [{d, 'IMETRICS_LEVEL', info}]}]}]}.
 %%
 %% When compiled out, the call is a no-op. The metric is not recorded, arguments are
-%% not evaluated. Avoid depending on the return values of the macro, since when
-%% disabled, the value will not be useful, with the exception of tick_s, tock_s:
+%% not evaluated, except where required to fit a contract on the return value
+%% (tick_s, tock_s, etc). Avoid depending on the return values of the macro, since
+%% when disabled, the value will not be useful, with the exception of tick_s, tock_s:
 %%
 %%     {Ref, Ticks2} = ?IMETRICS_TICK_S(debug, Ticks, query, millisecond)
 %%     {_Elapsed, Ticks3} = ?IMETRICS_TOCK_S(debug, Ticks2, Ref)
@@ -58,115 +59,121 @@
             false -> Default
         end).
 
+%% The value of a compiled-out call. Going through a fun that is applied at once
+%% leaves the compiled code as just the value, but keeps the compiler from
+%% warning that a term is constructed and never used when a macro is used as a
+%% statement, which is the usual way to use one.
+-define(IMETRICS_DISABLED(V), (fun() -> V end)()).
+
 %% imetrics:add/1,2,3
 -define(IMETRICS_ADD(Level, A1),
-    ?IMETRICS_AT(Level, imetrics:add(A1), ok)).
+    ?IMETRICS_AT(Level, imetrics:add(A1), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_ADD(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:add(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:add(A1, A2), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_ADD(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:add(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:add(A1, A2, A3), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:add_m/2,3
 -define(IMETRICS_ADD_M(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:add_m(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:add_m(A1, A2), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_ADD_M(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:add_m(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:add_m(A1, A2, A3), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:set_exemplar/2,3,4,5,6
 -define(IMETRICS_SET_EXEMPLAR(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2), true)).
 -define(IMETRICS_SET_EXEMPLAR(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3), true)).
 -define(IMETRICS_SET_EXEMPLAR(Level, A1, A2, A3, A4),
-    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3, A4), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3, A4), true)).
 -define(IMETRICS_SET_EXEMPLAR(Level, A1, A2, A3, A4, A5),
-    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3, A4, A5), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3, A4, A5), true)).
 -define(IMETRICS_SET_EXEMPLAR(Level, A1, A2, A3, A4, A5, A6),
-    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3, A4, A5, A6), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_exemplar(A1, A2, A3, A4, A5, A6), true)).
 
 %% imetrics:set_info/2
 -define(IMETRICS_SET_INFO(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:set_info(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_info(A1, A2), true)).
 
 %% imetrics:init_counter/1,2
 -define(IMETRICS_INIT_COUNTER(Level, A1),
-    ?IMETRICS_AT(Level, imetrics:init_counter(A1), ok)).
+    ?IMETRICS_AT(Level, imetrics:init_counter(A1), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_INIT_COUNTER(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:init_counter(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:init_counter(A1, A2), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:set_gauge/2,3
 -define(IMETRICS_SET_GAUGE(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:set_gauge(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_gauge(A1, A2), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_SET_GAUGE(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:set_gauge(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_gauge(A1, A2, A3), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:set_gauge_m/3
 -define(IMETRICS_SET_GAUGE_M(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:set_gauge_m(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_gauge_m(A1, A2, A3), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:set_multigauge/2,3
 -define(IMETRICS_SET_MULTIGAUGE(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:set_multigauge(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_multigauge(A1, A2), ?IMETRICS_DISABLED(fun erlang:nodes/0))).
 -define(IMETRICS_SET_MULTIGAUGE(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:set_multigauge(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_multigauge(A1, A2, A3), ?IMETRICS_DISABLED(fun erlang:nodes/0))).
 
 %% imetrics:update_gauge/2,3
 -define(IMETRICS_UPDATE_GAUGE(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:update_gauge(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:update_gauge(A1, A2), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_UPDATE_GAUGE(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:update_gauge(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:update_gauge(A1, A2, A3), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:update_gauge_m/3
 -define(IMETRICS_UPDATE_GAUGE_M(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:update_gauge_m(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:update_gauge_m(A1, A2, A3), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:set_counter_dimension/2
 -define(IMETRICS_SET_COUNTER_DIMENSION(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:set_counter_dimension(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:set_counter_dimension(A1, A2), ?IMETRICS_DISABLED(<<>>))).
 
 %% imetrics:register_slo/2
 -define(IMETRICS_REGISTER_SLO(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:register_slo(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:register_slo(A1, A2), ?IMETRICS_DISABLED({ok, undefined}))).
 
 %% imetrics:hist/2,3,4
 -define(IMETRICS_HIST(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:hist(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:hist(A1, A2), true)).
 -define(IMETRICS_HIST(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:hist(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:hist(A1, A2, A3), true)).
 -define(IMETRICS_HIST(Level, A1, A2, A3, A4),
-    ?IMETRICS_AT(Level, imetrics:hist(A1, A2, A3, A4), ok)).
+    ?IMETRICS_AT(Level, imetrics:hist(A1, A2, A3, A4), true)).
 
 %% imetrics:tick/1,2,3
 -define(IMETRICS_TICK(Level, A1),
-    ?IMETRICS_AT(Level, imetrics:tick(A1), ok)).
+    ?IMETRICS_AT(Level, imetrics:tick(A1), ?IMETRICS_DISABLED({undefined, native, 0}))).
 -define(IMETRICS_TICK(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:tick(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics:tick(A1, A2), ?IMETRICS_DISABLED({undefined, native, 0}))).
 -define(IMETRICS_TICK(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:tick(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics:tick(A1, A2, A3), ?IMETRICS_DISABLED({undefined, native, 0}))).
 
 %% imetrics:tock/1,2
 -define(IMETRICS_TOCK(Level, A1),
-    ?IMETRICS_AT(Level, imetrics:tock(A1), 0)).
+    ?IMETRICS_AT(Level, imetrics:tock(A1), ?IMETRICS_DISABLED(0))).
 -define(IMETRICS_TOCK(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:tock(A1, A2), 0)).
+    ?IMETRICS_AT(Level, imetrics:tock(A1, A2), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:tock_as/2
 -define(IMETRICS_TOCK_AS(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:tock_as(A1, A2), 0)).
+    ?IMETRICS_AT(Level, imetrics:tock_as(A1, A2), ?IMETRICS_DISABLED(0))).
 
 %% imetrics:tick_s/3,4
 -define(IMETRICS_TICK_S(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:tick_s(A1, A2, A3), {ok, A1})).
+    ?IMETRICS_AT(Level, imetrics:tick_s(A1, A2, A3), ?IMETRICS_DISABLED({make_ref(), A1}))).
 -define(IMETRICS_TICK_S(Level, A1, A2, A3, A4),
-    ?IMETRICS_AT(Level, imetrics:tick_s(A1, A2, A3, A4), {A2, A1})).
+    ?IMETRICS_AT(Level, imetrics:tick_s(A1, A2, A3, A4), ?IMETRICS_DISABLED({A2, A1}))).
 
 %% imetrics:tock_s/2
 -define(IMETRICS_TOCK_S(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics:tock_s(A1, A2), {0, A1})).
+    ?IMETRICS_AT(Level, imetrics:tock_s(A1, A2), ?IMETRICS_DISABLED({0, A1}))).
 
 %% imetrics:tock_as_s/3
 -define(IMETRICS_TOCK_AS_S(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics:tock_as_s(A1, A2, A3), {0, A1})).
+    ?IMETRICS_AT(Level, imetrics:tock_as_s(A1, A2, A3), ?IMETRICS_DISABLED({0, A1}))).
 
 %% imetrics:stop_tick_s/2
 -define(IMETRICS_STOP_TICK_S(Level, A1, A2),
@@ -182,26 +189,26 @@
 
 %% imetrics_hist_openmetrics:new/2,3,4
 -define(IMETRICS_HIST_NEW(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:new(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:new(A1, A2), true)).
 -define(IMETRICS_HIST_NEW(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:new(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:new(A1, A2, A3), true)).
 -define(IMETRICS_HIST_NEW(Level, A1, A2, A3, A4),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:new(A1, A2, A3, A4), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:new(A1, A2, A3, A4), true)).
 
 %% imetrics_hist_openmetrics:add/2,3
 -define(IMETRICS_HIST_ADD(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:add(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:add(A1, A2), ?IMETRICS_DISABLED({1, 0}))).
 -define(IMETRICS_HIST_ADD(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:add(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:add(A1, A2, A3), ?IMETRICS_DISABLED({1, 0}))).
 
 %% imetrics_hist_openmetrics:set_exemplar/2,3,4,5
 -define(IMETRICS_HIST_SET_EXEMPLAR(Level, A1, A2),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2), true)).
 -define(IMETRICS_HIST_SET_EXEMPLAR(Level, A1, A2, A3),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2, A3), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2, A3), true)).
 -define(IMETRICS_HIST_SET_EXEMPLAR(Level, A1, A2, A3, A4),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2, A3, A4), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2, A3, A4), true)).
 -define(IMETRICS_HIST_SET_EXEMPLAR(Level, A1, A2, A3, A4, A5),
-    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2, A3, A4, A5), ok)).
+    ?IMETRICS_AT(Level, imetrics_hist_openmetrics:set_exemplar(A1, A2, A3, A4, A5), true)).
 
 -endif.
