@@ -13,7 +13,7 @@ bin(V) when is_integer(V) ->
 bin(T) when is_tuple(T) andalso tuple_size(T) =< 8 ->
     L = tuple_to_list(T),
     L2 = [ bin(X) || X <- L ],
-    binary_join(L2, application:get_env(imetrics, separator, <<"_">>));
+    binary_join(L2, persistent_term:get({imetrics, separator}, <<"_">>));
 bin(M) when is_map(M) ->
     % Surprising finding: previous code using maps:map with an anonymous function
     % performs measurably worse on OTP <= 26 due to the repeated creation of the
