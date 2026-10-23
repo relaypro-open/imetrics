@@ -32,6 +32,9 @@ shard_test_() ->
         fun delete/1,
         fun restart_clears/1,
         fun raw_keys/1,
+        fun discard_exemplar_nasty/1,
+        fun discard_exemplar_unicode/1,
+        fun discard_exemplar_huge/1,
         fun shard_rows/1,
         fun exemplars/1,
         fun hist_get_all/1,
@@ -162,8 +165,9 @@ delete(_) ->
     ].
 
 %% Counter keys are stored raw and converted on read. Raw keys that convert to
-%% the same binaries are one series; a key that doesn't convert is stored but
-%% left out of every read; delete_counter/2 removes every raw form of a series.
+%% the same binaries are one series; a key that doesn't convert is stored, then
+%% discarded by the next read and counted in imetrics_discarded_series;
+%% delete_counter/2 removes every raw form of a series.
 raw_keys(_) ->
     imetrics:add(raw_c, #{k => v}),
     imetrics:add(raw_c, #{k => "v"}),
@@ -178,13 +182,21 @@ raw_keys(_) ->
     ok = imetrics:delete_counter(raw_d, #{k => <<"v">>}),
     imetrics:add_m(raw_t, {a, b}),
     BadKeyResult = imetrics:add_m(raw_bad, Bad),
+    BadRows = fun(Name) -> ets:select_count(imetrics_counters,
+                                            [{{{{'$1', '_'}, '_'}, '_'}, [{'=:=', '$1', {const, Name}}], [true]}]) end,
+    BadBefore = {BadRows(Bad), BadRows(raw_bad)},
     Types = imetrics:get_with_types(),
+    % the malformed series are gone after one read, and later reads don't count them again
+    Discarded = proplists:get_value(<<"imetrics_discarded_series">>, imetrics:get_with_types()),
+    DiscardedAgain = proplists:get_value(<<"imetrics_discarded_series">>, imetrics:get_with_types()),
     [
+        ?_assertMatch({N, M} when N > 0 andalso M > 0, BadBefore),
+        ?_assertEqual({counter, [{#{}, 2}]}, Discarded),
+        ?_assertEqual(Discarded, DiscardedAgain),
+        ?_assertEqual({0, 0}, {BadRows(Bad), BadRows(raw_bad)}),
         ?_assertEqual({counter, [{#{k => <<"v">>}, 3}]}, proplists:get_value(<<"raw_c">>, Types)),
         ?_assertEqual({counter, [{#{map_key => <<"key">>}, 3}]}, proplists:get_value(<<"raw_m">>, Types)),
         ?_assert(is_integer(BadResult)),
-        ?_assert(ets:select_count(imetrics_counters,
-                                  [{{{{'$1', '_'}, '_'}, '_'}, [{'=:=', '$1', {const, Bad}}], [true]}]) > 0),
         ?_assertEqual(undefined, proplists:get_value(<<"raw_d">>, Types)),
         ?_assertEqual(0, ets:select_count(imetrics_counters,
                                           [{{{{'$1', '_'}, '_'}, '_'}, [{'=:=', '$1', {const, raw_d}}], [true]}])),
@@ -193,6 +205,40 @@ raw_keys(_) ->
         ?_assert(is_integer(BadKeyResult)),
         ?_assertEqual(undefined, proplists:get_value(<<"raw_bad">>, Types))
     ].
+
+%% A discarded key is shown as the exemplar of imetrics_discarded_series, for
+%% finding where it came from: printable ASCII without the characters a label
+%% value can't hold, at most 100 long, and the exposition stays valid.
+discard_exemplar_nasty(_) ->
+    Key = discarded_exemplar_key({"quote\" backslash\\ newline\n \x{e9}", b, c, d, e, f, g, h, i}),
+    [?_assertNotEqual(nomatch, string:find(Key, "quote")),
+     ?_assert(is_label_safe(Key))].
+
+discard_exemplar_unicode(_) ->
+    Key = discarded_exemplar_key({"\x{1F600}\x{4e2d}\x{6587}", <<"\x{e9}"/utf8>>, c, d, e, f, g, h, i}),
+    [?_assert(Key =/= ""),
+     ?_assert(is_label_safe(Key))].
+
+discard_exemplar_huge(_) ->
+    Key = discarded_exemplar_key({binary:copy(<<"x">>, 100000), b, c, d, e, f, g, h, i}),
+    [?_assert(Key =/= ""),
+     ?_assert(is_label_safe(Key))].
+
+%% Writes a key that can't be converted, reads once (which discards it and sets
+%% the exemplar), then returns the exemplar's label value from a /metrics scrape.
+discarded_exemplar_key(BadName) ->
+    application:set_env(imetrics, openmetrics_exemplar_compat, true),
+    imetrics:add(BadName, #{k => v}),
+    _ = imetrics:get_counters(),
+    Body = http_get("/metrics"),
+    application:unset_env(imetrics, openmetrics_exemplar_compat),
+    {match, [Key]} = re:run(Body, "imetrics_discarded_series_total\\{\\} 1 # \\{key=\"([^\"]*)\"\\} 1 ",
+                            [{capture, all_but_first, list}]),
+    Key.
+
+is_label_safe(Key) ->
+    length(Key) =< 100 andalso
+        lists:all(fun(C) -> C >= 32 andalso C < 127 andalso C =/= $" andalso C =/= $\\ end, Key).
 
 %% Restarting imetrics recreates its tables, dropping every shard.
 restart_clears(_) ->

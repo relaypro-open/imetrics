@@ -499,14 +499,18 @@ get_counter_points() ->
     RawSums = ets:foldl(fun({{Series, _Shard}, Value}, Acc) ->
                                 maps:update_with(Series, fun(Sum) -> Sum + Value end, Value, Acc)
                         end, #{}, imetrics_counters),
-    Sums = maps:fold(fun({Name, Tags}, Value, Acc) ->
+    {Sums, Malformed} = maps:fold(fun({Name, Tags} = Series, Value, {Acc, Bad}) ->
                              try imetrics_utils:bin(Tags#{ name => Name }) of
                                  TagsWithName ->
-                                     maps:update_with(TagsWithName, fun(Sum) -> Sum + Value end, Value, Acc)
+                                     {maps:update_with(TagsWithName, fun(Sum) -> Sum + Value end, Value, Acc), Bad}
                              catch
-                                 error:_ -> Acc
+                                 error:_ -> {Acc, [Series | Bad]}
                              end
-                     end, #{}, RawSums),
+                     end, {#{}, []}, RawSums),
+
+    % Remove bad counters and record exemplar
+    discard_counters(Malformed),
+
     lists:sort(maps:to_list(Sums)).
 
 % handle metrics with a function
@@ -612,3 +616,33 @@ tock_s_name_match(Ticks, Name) ->
         MapMatchFun({__K, __V, I2}) ->
             MapMatchFun(maps:next(I2))
     end(maps:next(I)).
+
+-spec discard_counters([{term(), map()}]) -> ok.
+discard_counters([]) ->
+    ok;
+discard_counters([First | _] = Series) ->
+    NSched = erlang:system_info(schedulers),
+    [ets:delete(imetrics_counters, {S, Shard}) || S <- Series, Shard <- lists:seq(1, NSched)],
+
+    add(imetrics_discarded_series, length(Series)),
+    try
+        DLabel = key_label(First),
+        set_exemplar(imetrics_discarded_series, length(Series), #{key => DLabel}),
+        ok
+    catch
+        _:_ ->
+            % should not be reachable, but provided for safety
+            ok
+    end.
+
+%% The key printed to a bounded depth, as ASCII without the characters that
+%% can't appear in an exposition label value, cut to 100 characters so the
+%% exemplar's labels stay within the 128 characters the format allows.
+-spec key_label(term()) -> binary().
+key_label(Series) ->
+    Printed = lists:flatten(io_lib:format("~tP", [Series, 10])),
+    Safe = [case C of
+                _ when C >= 32, C < 127, C =/= $", C =/= $\\ -> C;
+                _ -> $?
+            end || C <- lists:sublist(Printed, 100)],
+    list_to_binary(Safe).
