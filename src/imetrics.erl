@@ -105,16 +105,18 @@ add(Name, Value) ->
     add(Name, #{}, Value).
 
 %% Counters are sharded by scheduler: each series is stored as up to
-%% erlang:system_info(schedulers) rows keyed {TagsWithName, SchedulerId}, so
+%% erlang:system_info(schedulers) rows keyed {{Name, Tags}, SchedulerId}, so
 %% concurrent adds to the same series don't serialize on one ETS row lock.
 %% Readers sum the shards (see get_counter_points/0). The return value is the
 %% calling scheduler's shard after the increment, not the series total.
+%%
+%% Name and Tags are stored in the ets table and converted to binaries on the
+%% scrape path. Invalid metrics will be silently dropped on scrape.
 add(Name, Tags, Value) ->
     ?CATCH_KNOWN_EXC(
         begin
             true = is_integer(Value),
-            TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
-            Key = {TagsWithName, erlang:system_info(scheduler_id)},
+            Key = {{Name, Tags}, erlang:system_info(scheduler_id)},
             ets:update_counter(imetrics_counters, Key, Value, {Key, 0})
         end
     ).
@@ -421,9 +423,18 @@ get_hist() ->
 delete_counter(Name, Tags) ->
     ?CATCH_KNOWN_EXC(
         begin
+            % Find all keys that match the binary representation of the metric name. This
+            % ensures that no metric is left to be scraped by this name.
             TagsWithName = imetrics_utils:bin(Tags#{ name => Name }),
-            lists:foreach(fun(Shard) -> ets:delete(imetrics_counters, {TagsWithName, Shard}) end,
-                          lists:seq(1, erlang:system_info(schedulers))),
+            Keys = ets:foldl(fun({{{N, T}, _Shard} = Key, _}, Acc) ->
+                                     try imetrics_utils:bin(T#{ name => N }) of
+                                         TagsWithName -> [Key | Acc];
+                                         _ -> Acc
+                                     catch
+                                         error:_ -> Acc
+                                     end
+                             end, [], imetrics_counters),
+            lists:foreach(fun(Key) -> ets:delete(imetrics_counters, Key) end, Keys),
             ok
         end
     ).
@@ -473,20 +484,41 @@ get_unmapped(T) ->
     lists:reverse(Acc).
 
 get_mapped(T) ->
-    Dict = ets:foldl(fun get_mapped_/2, orddict:new(), T),
-    orddict:to_list(Dict).
+    finish_mapped(ets:foldl(fun get_mapped_/2, #{}, T)).
 
 % like get_mapped(imetrics_counters), but sums each series' scheduler shards first.
 % Points within a metric come out sorted by tags.
 get_mapped_counters() ->
-    Dict = lists:foldl(fun get_mapped_/2, orddict:new(), get_counter_points()),
-    orddict:to_list(Dict).
+    finish_mapped(lists:foldl(fun get_mapped_/2, #{}, get_counter_points())).
 
+% get_mapped_/2 builds each metric's points in reverse. finish_mapped/1 puts everything
+% back into the expected order.
+finish_mapped(Mapped) ->
+    [{Name, lists:reverse(Points)} || {Name, Points} <- lists:sort(maps:to_list(Mapped))].
+
+% Keeping the growing accumulator on the right avoids O(n^2) performance.
+prepend_points(Name, Points, Mapped) ->
+    Reversed = lists:reverse(Points),
+    maps:update_with(Name, fun(Old) -> Reversed ++ Old end, Reversed, Mapped).
+
+%% Sum by shard first, then convert {Name, Tags} to binary and sum again.
 -spec get_counter_points() -> [{map(), integer()}].
 get_counter_points() ->
-    Sums = ets:foldl(fun({{TagsWithName, _Shard}, Value}, Acc) ->
-                             maps:update_with(TagsWithName, fun(Sum) -> Sum + Value end, Value, Acc)
-                     end, #{}, imetrics_counters),
+    RawSums = ets:foldl(fun({{Series, _Shard}, Value}, Acc) ->
+                                maps:update_with(Series, fun(Sum) -> Sum + Value end, Value, Acc)
+                        end, #{}, imetrics_counters),
+    {Sums, Malformed} = maps:fold(fun({Name, Tags} = Series, Value, {Acc, Bad}) ->
+                             try imetrics_utils:bin(Tags#{ name => Name }) of
+                                 TagsWithName ->
+                                     {maps:update_with(TagsWithName, fun(Sum) -> Sum + Value end, Value, Acc), Bad}
+                             catch
+                                 error:_ -> {Acc, [Series | Bad]}
+                             end
+                     end, {#{}, []}, RawSums),
+
+    % Remove bad counters and record exemplar
+    discard_counters(Malformed),
+
     lists:sort(maps:to_list(Sums)).
 
 % handle metrics with a function
@@ -510,12 +542,12 @@ get_mapped_({#{ name := Name } = Tags, Value}, MappedDict0) when not is_map_key(
         end,
     
     Tags4 = maps:remove(name, Tags3),
-    orddict:append_list(Name, [{Tags4, Value}], MappedDict0);
+    prepend_points(Name, [{Tags4, Value}], MappedDict0);
 
 % handle multigauge metrics
 get_mapped_({#{ name := Name, '_multigauge' := true }, Value}, MappedDict0) ->
     List = get_mapped_multigauge(ets:lookup(imetrics_map_keys, Name), Value),
-    orddict:append_list(Name, List, MappedDict0);
+    prepend_points(Name, List, MappedDict0);
 
 % all other metrics we ignore
 get_mapped_(_, MappedDict0) ->
@@ -592,3 +624,33 @@ tock_s_name_match(Ticks, Name) ->
         MapMatchFun({__K, __V, I2}) ->
             MapMatchFun(maps:next(I2))
     end(maps:next(I)).
+
+-spec discard_counters([{term(), map()}]) -> ok.
+discard_counters([]) ->
+    ok;
+discard_counters([First | _] = Series) ->
+    NSched = erlang:system_info(schedulers),
+    [ets:delete(imetrics_counters, {S, Shard}) || S <- Series, Shard <- lists:seq(1, NSched)],
+
+    add(imetrics_discarded_series, length(Series)),
+    try
+        DLabel = key_label(First),
+        set_exemplar(imetrics_discarded_series, length(Series), #{key => DLabel}),
+        ok
+    catch
+        _:_ ->
+            % should not be reachable, but provided for safety
+            ok
+    end.
+
+%% The key printed to a bounded depth, as ASCII without the characters that
+%% can't appear in an exposition label value, cut to 100 characters so the
+%% exemplar's labels stay within the 128 characters the format allows.
+-spec key_label(term()) -> binary().
+key_label(Series) ->
+    Printed = lists:flatten(io_lib:format("~tP", [Series, 10])),
+    Safe = [case C of
+                _ when C >= 32, C < 127, C =/= $", C =/= $\\ -> C;
+                _ -> $?
+            end || C <- lists:sublist(Printed, 100)],
+    list_to_binary(Safe).
